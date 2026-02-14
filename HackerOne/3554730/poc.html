@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8" />
+<pre id="out">loading...</pre>
+<script>
+(async () => {
+  const r = await fetch("http://localhost:7101/api/v2/config?format=json", { credentials: "include" });
+  const t = await r.text();
+  document.getElementById("out").textContent =
+    "status=" + r.status + "\n\n" + t.slice(0, 5000);
+})();
+</script>
