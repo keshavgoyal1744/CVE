@@ -1,0 +1,11 @@
+<script>
+(async () => {
+  const ts = Date.now();
+  const body = JSON.stringify({
+    metrics: [{ tags: { name: "csrf.browser.metric", id: "b" + ts }, timestamp: ts, value: 1.0 }]
+  });
+
+  const r = await fetch("http://localhost:7101/api/v1/publish", { method: "POST", body });
+  document.getElementById("out").textContent = "status=" + r.status + "\nid=b" + ts;
+})();
+</script>
