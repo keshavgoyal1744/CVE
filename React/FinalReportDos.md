@@ -33,7 +33,7 @@ This occurs before userland code, route handlers, or server action logic execute
 
 * Node version: v24.13.0
 * OS: Linux
-**Package versions**
+* **Package versions**
 
 ```bash
 npm ls react react-dom react-server-dom-webpack busboy
