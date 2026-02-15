@@ -57,7 +57,7 @@ npm i react react-dom react-server-dom-webpack busboy
 
 Create server.mjs:
 
-```bash
+```js
 import http from "node:http";
 import Busboy from "busboy";
 
