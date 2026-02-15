@@ -1,11 +1,22 @@
-### A. Vulnerability Summary
-A remote attacker can trigger deterministic memory exhaustion in servers using React Server Components (RSC) multipart reply decoding.
-The `decodeReplyFromBusboy()` implementation buffers uploaded file parts entirely in memory (external/native buffers) with no size bound before application code executes.
-Because the buffering occurs inside the framework decoding layer rather than userland handlers, typical mitigations (route handlers, action code, or streaming processing) cannot prevent the allocation.
-In memory-restricted environments (containers/serverless), a single unauthenticated request reliably causes request failure and sustained memory pressure, resulting in denial of service.
+# Unbounded memory buffering in `decodeReplyFromBusboy` allows unauthenticated multipart upload DoS (RSC)
 
+## Summary
 
-The issue is not dependent on Node.js configuration or reverse proxy behavior; it occurs in the decoding layer prior to application logic.
+A remote attacker can trigger deterministic memory exhaustion in servers using React Server Components multipart reply decoding. `decodeReplyFromBusboy()` buffers uploaded file parts entirely in memory (external/native buffers) with no size bound before application code executes, making it a framework-level DoS primitive. In memory-capped environments (containers/serverless), a single unauthenticated request reliably causes request failure and sustained memory pressure.
+
+## Root Cause
+
+In `react-server`, multipart file parts are accumulated without a byte cap:
+
+* `ReactFlightReplyServer.js` creates `chunks: []` for each file handle, appends all chunks (`handle.chunks.push(chunk)`), then materializes a full `Blob(handle.chunks, ...)`.
+* The Node multipart decoder feeds attacker-controlled chunks into this sink via `resolveFileInfo` → `resolveFileChunk` (per data event) → `resolveFileComplete`.
+* This behavior is production-relevant (no `__DEV__` gating).
+
+## Impact
+
+* Forces memory allocation proportional to attacker-controlled upload size before user handlers can reject the request.
+* In memory-restricted deployments, drives the process to its memory ceiling and causes request failure; attackers can repeat requests to keep instances unhealthy (restart loops / autoscaling exhaustion).
+* Upstream limits (proxy/busboy) mitigate only if correctly configured; React's decode API currently provides no built-in bound and behaves as an unsafe sink by default.
 
 ## Attack Vector
 
@@ -19,32 +30,7 @@ The issue is not dependent on Node.js configuration or reverse proxy behavior; i
 * OS: Linux
 * Package versions: `npm ls react react-dom react-server-dom-webpack busboy`
 
-### B. Why It Is Exploitable (Root Cause)
-In react-server, file parts are accumulated in an in-memory array of chunks with no byte cap:
-ReactFlightReplyServer.js (line 1902) creates chunks: [] for each file handle.
-ReactFlightReplyServer.js (line 1914) appends every chunk: handle.chunks.push(chunk).
-ReactFlightReplyServer.js (line 1926) materializes the whole file into a Blob(handle.chunks, ...).
-
-All Node multipart decoders in the RSC packages feed attacker-controlled chunks into that sink, e.g.:
-ReactFlightDOMServerNode.js (line 597) calls resolveFileInfo(...)
-ReactFlightDOMServerNode.js (line 599) calls resolveFileChunk(...) on every data event
-ReactFlightDOMServerNode.js (line 603) calls resolveFileComplete(...) at end
-
-No __DEV__ gating here; the behavior is production-relevant.
-
-### C. Real-World Impact
-This issue creates a framework-level denial-of-service primitive:
-
-* A single HTTP request forces the server to allocate memory proportional to attacker-controlled upload size
-* Allocation occurs before application code executes
-* The request cannot be rejected safely by user handlers
-* In containerized deployments the process reaches its memory limit and begins failing requests
-* Attackers can repeat requests to keep instances permanently unhealthy (restart loops / autoscaling exhaustion)
-
-Because React Server Actions endpoints are commonly exposed without authentication, this becomes a reliable unauthenticated availability attack against production deployments.
-The issue is not dependent on Node.js configuration or reverse proxy behavior; it occurs in the decoding layer prior to application logic.
-
-### D. Step-by-Step Reproduction
+## Step-by-Step Reproduction
 Preconditions: a Node server endpoint that accepts multipart/form-data and uses decodeReplyFromBusboy(...) (directly or via a framework integration) without strict upstream body/file size limits.
 
 Create a minimal repro server (separate folder is easiest):
