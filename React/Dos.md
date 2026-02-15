@@ -1,6 +1,14 @@
 ### A. Vulnerability Summary
-A remote attacker can crash a server that uses React's multipart reply decoding by uploading a large file, because React buffers the entire file in memory with no size limit.
+A remote attacker can trigger deterministic memory exhaustion in servers using React Server Components (RSC) multipart reply decoding.
+The `decodeReplyFromBusboy()` implementation buffers uploaded file parts entirely in memory (external/native buffers) with no size bound before application code executes.
+Because the buffering occurs inside the framework decoding layer rather than userland handlers, typical mitigations (route handlers, action code, or streaming processing) cannot prevent the allocation.
+In memory-restricted environments (containers/serverless), a single unauthenticated request reliably causes request failure and sustained memory pressure, resulting in denial of service.
 
+## Attack Vector
+
+- Remote exploitation possible
+- No authentication required
+- Single malicious request sufficient to trigger resource exhaustion
 ### B. Why It Is Exploitable (Root Cause)
 In react-server, file parts are accumulated in an in-memory array of chunks with no byte cap:
 ReactFlightReplyServer.js (line 1902) creates chunks: [] for each file handle.
@@ -15,8 +23,16 @@ ReactFlightDOMServerNode.js (line 603) calls resolveFileComplete(...) at end
 No __DEV__ gating here; the behavior is production-relevant.
 
 ### C. Real-World Impact
-Process OOM and crash (or severe GC thrash), taking down SSR/RSC infrastructure.
-If autoscaled/restarted, attacker can force crash loops and sustained outage by repeating requests.
+This issue creates a framework-level denial-of-service primitive:
+
+* A single HTTP request forces the server to allocate memory proportional to attacker-controlled upload size
+* Allocation occurs before application code executes
+* The request cannot be rejected safely by user handlers
+* In containerized deployments the process reaches its memory limit and begins failing requests
+* Attackers can repeat requests to keep instances permanently unhealthy (restart loops / autoscaling exhaustion)
+
+Because React Server Actions endpoints are commonly exposed without authentication, this becomes a reliable unauthenticated availability attack against production deployments.
+
 
 ### D. Step-by-Step Reproduction
 Preconditions: a Node server endpoint that accepts multipart/form-data and uses decodeReplyFromBusboy(...) (directly or via a framework integration) without strict upstream body/file size limits.
