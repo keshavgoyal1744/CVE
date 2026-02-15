@@ -162,6 +162,7 @@ listening on http://127.0.0.1:3000
 [+3.5s] in=2810MB rss=2880MB heapUsed=16MB ext=2813MB
 
 ```
+Observed: RSS and `external` increase roughly linearly with upload size while heapUsed stays small (external/native buffering).
 
 ---
 
