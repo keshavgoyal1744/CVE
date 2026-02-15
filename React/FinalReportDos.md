@@ -182,7 +182,7 @@ listening on http://127.0.0.1:3000
 
 ```
 Observed: RSS and `external` increase roughly linearly with upload size while heapUsed stays small (external/native buffering).
-
+Note: growth is primarily in process.memoryUsage().external, so V8 heap limits do not mitigate.
 
 ---
 ### Test 2: 
