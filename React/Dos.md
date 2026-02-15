@@ -241,3 +241,26 @@ listening on http://127.0.0.1:3000
 
 ```
 
+
+```bash
+[keshavgoyal@hazelnut react]$ cat /sys/fs/cgroup/$(systemctl --user show -p ControlGroup --value run-*.scope)/memory.events
+low 0
+high 0
+max 5325
+oom 0
+oom_kill 0
+oom_group_kill 0
+
+[keshavgoyal@hazelnut react]$ cg=$(systemctl --user show -p ControlGroup --value run-r721566ba89514e4687e689d73f666440.scope)
+cat /sys/fs/cgroup${cg}/memory.events
+cat /sys/fs/cgroup${cg}/memory.max
+cat /sys/fs/cgroup${cg}/memory.current
+low 0
+high 0
+max 5325
+oom 0
+oom_kill 0
+oom_group_kill 0
+419430400
+418721792
+```
