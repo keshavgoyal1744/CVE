@@ -79,7 +79,8 @@ http.createServer((req, res) => {
 
   bb.on("finish", async () => {
     clearInterval(memTimer);
-    try { await root; } catch {}
+    try { await root; }
+    catch (e) { console.error("root rejected:", e?.name, e?.message); }
     res.writeHead(200, { "content-type": "text/plain" });
     res.end("done\n");
   });
@@ -88,6 +89,7 @@ http.createServer((req, res) => {
 }).listen(3000, "127.0.0.1", () => {
   console.log("listening on http://127.0.0.1:3000");
 });
+
 
 
 ```
@@ -164,129 +166,11 @@ listening on http://127.0.0.1:3000
 ```
 Observed: RSS and `external` increase roughly linearly with upload size while heapUsed stays small (external/native buffering).
 
----
 
+---
 ### Test 2: 
 
-Edited server.mjs by adding a console error:
-
-```bash
-try { await root; }
-catch (e) { console.error("root rejected:", e?.name, e?.message); }
-```
-
-New script:
-```bash
-
-import http from "node:http";
-import Busboy from "busboy";
-
-// IMPORTANT: import the ESM entry (not CJS require) so export conditions can apply.
-import { decodeReplyFromBusboy } from "react-server-dom-webpack/server.node";
-
-const webpackMap = {};
-
-function mb(n) { return Math.round(n / 1024 / 1024); }
-
-http.createServer((req, res) => {
-  if (req.method !== "POST") {
-    res.writeHead(200, { "content-type": "text/plain" });
-    res.end("POST a multipart body\n");
-    return;
-  }
-
-  const started = Date.now();
-  const bb = Busboy({ headers: req.headers });
-
-  const root = decodeReplyFromBusboy(bb, webpackMap);
-
-  let bytesIn = 0;
-  req.on("data", (buf) => (bytesIn += buf.length));
-
-  const memTimer = setInterval(() => {
-    const m = process.memoryUsage();
-    console.log(
-      `[+${((Date.now()-started)/1000).toFixed(1)}s] ` +
-      `in=${mb(bytesIn)}MB rss=${mb(m.rss)}MB heapUsed=${mb(m.heapUsed)}MB ext=${mb(m.external)}MB`
-    );
-  }, 250);
-
-  bb.on("finish", async () => {
-    clearInterval(memTimer);
-try { await root; }
-catch (e) { console.error("root rejected:", e?.name, e?.message); }
-    res.writeHead(200, { "content-type": "text/plain" });
-    res.end("done\n");
-  });
-
-  req.pipe(bb);
-}).listen(3000, "127.0.0.1", () => {
-  console.log("listening on http://127.0.0.1:3000");
-});
-
-```
-
-Run the server.mjs
-```bash
-[keshavgoyal@hazelnut rsc-file-dos]$ systemd-run --user --scope -p MemoryMax=400M   node --conditions=react-server server.mjs
-Running scope as unit: run-r53b643f3859b403cbd95838259305ea3.scope
-listening on http://127.0.0.1:3000
-```
-
-Send the Payload:
-
-```bash
-[keshavgoyal@hazelnut react]$ dd if=/dev/zero of=big-600m.bin bs=1M count=600
-curl -F "file=@big-600m.bin" http://127.0.0.1:3000/
-600+0 records in
-600+0 records out
-629145600 bytes (629 MB, 600 MiB) copied, 0.270321 s, 2.3 GB/s
-done
-```
-
-
-Output:
-```bash
-[keshavgoyal@hazelnut rsc-file-dos]$ systemd-run --user --scope -p MemoryMax=400M   node --conditions=react-server server.mjs
-Running scope as unit: run-r53b643f3859b403cbd95838259305ea3.scope
-listening on http://127.0.0.1:3000
-[+0.3s] in=174MB rss=219MB heapUsed=8MB ext=177MB
-[+0.5s] in=368MB rss=414MB heapUsed=8MB ext=371MB
-[+1.2s] in=374MB rss=350MB heapUsed=8MB ext=377MB
-[+1.5s] in=396MB rss=373MB heapUsed=8MB ext=399MB
-[+1.9s] in=424MB rss=391MB heapUsed=8MB ext=427MB
-[+2.2s] in=454MB rss=394MB heapUsed=8MB ext=457MB
-[+2.5s] in=486MB rss=397MB heapUsed=8MB ext=489MB
-[+2.7s] in=516MB rss=398MB heapUsed=8MB ext=519MB
-[+3.0s] in=544MB rss=400MB heapUsed=8MB ext=547MB
-[+3.2s] in=576MB rss=403MB heapUsed=9MB ext=579MB
-root rejected: Error Connection closed.
-
-```
-
-
-```bash
-[keshavgoyal@hazelnut react]$ cg=$(systemctl --user show -p ControlGroup --value run-r53b643f3859b403cbd95838259305ea3.scope)
-cat /sys/fs/cgroup${cg}/memory.events
-cat /sys/fs/cgroup${cg}/memory.max
-cat /sys/fs/cgroup${cg}/memory.current
-low 0
-high 0
-max 5407
-oom 0
-oom_kill 0
-oom_group_kill 0
-419430400
-419287040
-```
-
-
-
-
----
-### Test 3: 
-
-Run the server.mjs (same file as test2)
+Run the server.mjs (same file as before)
 ```bash
 [keshavgoyal@hazelnut rsc-file-dos]$ systemd-run --user --scope -p MemoryMax=400M \
   node --conditions=react-server server.mjs
