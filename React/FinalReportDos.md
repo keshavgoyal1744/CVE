@@ -134,7 +134,7 @@ Watch the server logs: rss should climb roughly with upload size. Observe extern
 
 RSS/external grow linearly; this causes request failure and/or process termination depending on memory limits.
 
-## Exploit chain / amplification
+## Exploitation amplification
 Practical chaining is "DoS amplification": if the target has an auto-restart supervisor, repeating the upload keeps it in a restart loop. If your app also has expensive per-request work after decode, this becomes even easier to sustain.
 
 
