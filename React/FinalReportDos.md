@@ -18,7 +18,7 @@ In `react-server`, multipart file parts are accumulated without a byte cap:
 
 * Forces memory allocation proportional to attacker-controlled upload size before user handlers can reject the request.
 * In memory-restricted deployments, drives the process to its memory ceiling and causes request failure; attackers can repeat requests to keep instances unhealthy (restart loops / autoscaling exhaustion).
-* Upstream limits (proxy/busboy) mitigate only if correctly configured; React's decode API currently provides no built-in bound and behaves as an unsafe sink by default.
+* Upstream limits (proxy/busboy) mitigate only if correctly configured; React’s decoding layer acts as an implicit memory sink without a default safety bound.
 * Even with streaming multipart parsing (Busboy), the React decode layer itself buffers file parts into memory by design; therefore the unsafe behavior exists unless every integration configures explicit file/body size limits upstream.3
   
 This occurs before userland code, route handlers, or server action logic executes, therefore application developers cannot safely reject the request once parsing begins.
@@ -33,8 +33,10 @@ This occurs before userland code, route handlers, or server action logic execute
 
 * Node version: v24.13.0
 * OS: Linux
-* Package versions:
-[keshavgoyal@hazelnut rsc-file-dos]$ npm ls react react-dom react-server-dom-webpack busboy
+***Package versions**
+
+```bash
+npm ls react react-dom react-server-dom-webpack busboy
 rsc-file-dos@1.0.0 /tmp/rsc-file-dos
 ├── busboy@1.6.0
 ├─┬ react-dom@19.2.4
@@ -43,6 +45,7 @@ rsc-file-dos@1.0.0 /tmp/rsc-file-dos
 │ ├── react-dom@19.2.4 deduped
 │ └── react@19.2.4 deduped
 └── react@19.2.4
+```
 
 
 ## Step-by-Step Reproduction
@@ -262,6 +265,12 @@ memory.events: max 5608
 ```
 
 The `memory.events` counter shows 5608 allocation failures due to `MemoryMax` being reached.
+
+
+# Security Impact Assessment
+
+This issue provides a low-cost, single-request denial-of-service primitive against public server action endpoints. Because allocation is linear with attacker-controlled input and occurs pre-handler, it bypasses typical application safeguards and can repeatedly force instance failure in autoscaled deployments. This qualifies as a remote unauthenticated availability impact.
+
 
 # Suggested Fix
 
