@@ -387,7 +387,7 @@ oom_group_kill 0
 ---
 ### Test 5: 
 
-Run the server.mjs
+Run the server.mjs (same file as test4)
 ```bash
 [keshavgoyal@hazelnut rsc-file-dos]$ systemd-run --user --scope -p MemoryMax=400M \
   node --conditions=react-server server.mjs
@@ -444,3 +444,29 @@ oom 0
 oom_kill 0
 oom_group_kill 0
 ```
+
+Running the server under a 400 MiB cgroup limit (`MemoryMax=400M`) and uploading a 600 MiB multipart file causes React's multipart reply decode to push the process to the memory ceiling and repeatedly hit the limit.
+
+## Observed Behavior During Upload
+
+- `process.memoryUsage().external` increased roughly linearly with bytes received
+- `heapUsed` remained at approximately 7–9 MB
+- RSS climbed until pinned around 400 MB
+- The decode promise then failed with: `root rejected: Error Connection closed.`
+
+## Cgroup Evidence After Request
+```
+memory.max: 419430400
+memory.current: 418742272
+memory.events: max 5608
+```
+
+The `memory.events` counter shows 5608 allocation failures due to `MemoryMax` being reached.
+
+## Impact
+
+This demonstrates unbounded buffering of attacker-controlled file uploads in external/native memory during `decodeReplyFromBusboy`, leading to:
+
+- Reliable request failure
+- Severe availability degradation in memory-capped deployments (containers/serverless)
+- Potential denial-of-service vector through resource exhaustion
