@@ -4,6 +4,9 @@ The `decodeReplyFromBusboy()` implementation buffers uploaded file parts entirel
 Because the buffering occurs inside the framework decoding layer rather than userland handlers, typical mitigations (route handlers, action code, or streaming processing) cannot prevent the allocation.
 In memory-restricted environments (containers/serverless), a single unauthenticated request reliably causes request failure and sustained memory pressure, resulting in denial of service.
 
+
+The issue is not dependent on Node.js configuration or reverse proxy behavior; it occurs in the decoding layer prior to application logic.
+
 ## Attack Vector
 
 - Remote exploitation possible
@@ -32,7 +35,7 @@ This issue creates a framework-level denial-of-service primitive:
 * Attackers can repeat requests to keep instances permanently unhealthy (restart loops / autoscaling exhaustion)
 
 Because React Server Actions endpoints are commonly exposed without authentication, this becomes a reliable unauthenticated availability attack against production deployments.
-
+The issue is not dependent on Node.js configuration or reverse proxy behavior; it occurs in the decoding layer prior to application logic.
 
 ### D. Step-by-Step Reproduction
 Preconditions: a Node server endpoint that accepts multipart/form-data and uses decodeReplyFromBusboy(...) (directly or via a framework integration) without strict upstream body/file size limits.
@@ -263,7 +266,7 @@ listening on http://127.0.0.1:3000
 low 0
 high 0
 max 5325
-oom 0
+ 0
 oom_kill 0
 oom_group_kill 0
 
