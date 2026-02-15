@@ -4,6 +4,8 @@
 
 A remote attacker can trigger deterministic memory exhaustion in servers using React Server Components multipart reply decoding. `decodeReplyFromBusboy()` buffers uploaded file parts entirely in memory (external/native buffers) with no size bound before application code executes, making it a framework-level DoS primitive. In memory-capped environments (containers/serverless), a single unauthenticated request reliably causes request failure and sustained memory pressure.
 
+Many frameworks and custom RSC deployments expose server actions endpoints publicly; this provides an unauthenticated DoS vector when those endpoints accept multipart bodies and call decodeReplyFromBusboy.
+
 ## Root Cause
 
 In `react-server`, multipart file parts are accumulated without a byte cap:
@@ -17,8 +19,10 @@ In `react-server`, multipart file parts are accumulated without a byte cap:
 * Forces memory allocation proportional to attacker-controlled upload size before user handlers can reject the request.
 * In memory-restricted deployments, drives the process to its memory ceiling and causes request failure; attackers can repeat requests to keep instances unhealthy (restart loops / autoscaling exhaustion).
 * Upstream limits (proxy/busboy) mitigate only if correctly configured; React's decode API currently provides no built-in bound and behaves as an unsafe sink by default.
+* Even with streaming multipart parsing (Busboy), the React decode layer itself buffers file parts into memory by design; therefore the unsafe behavior exists unless every integration configures explicit file/body size limits upstream.
 
-Even with streaming multipart parsing (Busboy), the React decode layer itself buffers file parts into memory by design; therefore the unsafe behavior exists unless every integration configures explicit file/body size limits upstream.
+Many frameworks and custom RSC deployments expose server actions endpoints publicly; this provides an unauthenticated DoS vector when those endpoints accept multipart bodies and call decodeReplyFromBusboy.
+
 
 ## Attack Vector
 
