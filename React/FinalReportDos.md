@@ -362,20 +362,6 @@ memory.events: max 5608
 
 The `memory.events` counter shows 5608 allocation failures due to `MemoryMax` being reached.
 
-## Impact
-
-This issue creates a framework-level denial-of-service primitive:
-
-* A single HTTP request forces the server to allocate memory proportional to attacker-controlled upload size
-* Allocation occurs before application code executes
-* The request cannot be rejected safely by user handlers
-* In containerized deployments the process reaches its memory limit and begins failing requests
-* Attackers can repeat requests to keep instances permanently unhealthy (restart loops / autoscaling exhaustion)
-
-Because React Server Actions endpoints are commonly exposed without authentication, this becomes a reliable unauthenticated availability attack against production deployments.
-The issue is not dependent on Node.js configuration or reverse proxy behavior; it occurs in the decoding layer prior to application logic.
-
-
 # Suggested Fix
 
 The decoding API should enforce a bounded buffering policy. Possible fixes:
