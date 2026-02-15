@@ -18,6 +18,8 @@ In `react-server`, multipart file parts are accumulated without a byte cap:
 * In memory-restricted deployments, drives the process to its memory ceiling and causes request failure; attackers can repeat requests to keep instances unhealthy (restart loops / autoscaling exhaustion).
 * Upstream limits (proxy/busboy) mitigate only if correctly configured; React's decode API currently provides no built-in bound and behaves as an unsafe sink by default.
 
+Even with streaming multipart parsing (Busboy), the React decode layer itself buffers file parts into memory by design; therefore the unsafe behavior exists unless every integration configures explicit file/body size limits upstream.
+
 ## Attack Vector
 
 - Remote exploitation possible
@@ -123,7 +125,7 @@ curl -F "file=@big.bin" http://127.0.0.1:3000/
 ```
 
 Verify exploitation:
-Watch the server logs: rss should climb roughly with upload size. Eventually the process will stall heavily or terminate (OOM), causing availability loss.
+Watch the server logs: rss should climb roughly with upload size. Observe external and RSS grow roughly linearly with uploaded bytes; on typical container/serverless limits this causes request failure and service degradation, and may trigger process termination depending on memory limits.
 
 E. Exploit Chain Possibility
 Practical chaining is "DoS amplification": if the target has an auto-restart supervisor, repeating the upload keeps it in a restart loop. If your app also has expensive per-request work after decode, this becomes even easier to sustain.
