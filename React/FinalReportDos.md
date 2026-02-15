@@ -14,6 +14,8 @@ In `react-server`, multipart file parts are accumulated without a byte cap:
 * The Node multipart decoder feeds attacker-controlled chunks into this sink via `resolveFileInfo` → `resolveFileChunk` (per data event) → `resolveFileComplete`.
 * This behavior is production-relevant (no `__DEV__` gating).
 
+The buffering occurs inside the React decoding layer prior to any framework routing, action handler, or middleware execution.
+
 ## Impact
 
 * Forces memory allocation proportional to attacker-controlled upload size before user handlers can reject the request.
