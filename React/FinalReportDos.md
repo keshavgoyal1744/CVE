@@ -21,8 +21,6 @@ In `react-server`, multipart file parts are accumulated without a byte cap:
 * Upstream limits (proxy/busboy) mitigate only if correctly configured; React's decode API currently provides no built-in bound and behaves as an unsafe sink by default.
 * Even with streaming multipart parsing (Busboy), the React decode layer itself buffers file parts into memory by design; therefore the unsafe behavior exists unless every integration configures explicit file/body size limits upstream.
 
-Many frameworks and custom RSC deployments expose server actions endpoints publicly; this provides an unauthenticated DoS vector when those endpoints accept multipart bodies and call decodeReplyFromBusboy.
-
 
 ## Attack Vector
 
@@ -113,7 +111,7 @@ http.createServer((req, res) => {
 Run it:
 
 ```bash
-node server.mjs
+node --conditions=react-server server.mjs
 ```
 Generate a large file (pick a size that will exceed your Node memory limit):
 
