@@ -19,7 +19,7 @@ In `react-server`, multipart file parts are accumulated without a byte cap:
 * Forces memory allocation proportional to attacker-controlled upload size before user handlers can reject the request.
 * In memory-restricted deployments, drives the process to its memory ceiling and causes request failure; attackers can repeat requests to keep instances unhealthy (restart loops / autoscaling exhaustion).
 * Upstream limits (proxy/busboy) mitigate only if correctly configured; React’s decoding layer acts as an implicit memory sink without a default safety bound.
-* Even with streaming multipart parsing (Busboy), the React decode layer itself buffers file parts into memory by design; therefore the unsafe behavior exists unless every integration configures explicit file/body size limits upstream.3
+* Even with streaming multipart parsing (Busboy), the React decode layer itself buffers file parts into memory by design; therefore the unsafe behavior exists unless every integration configures explicit file/body size limits upstream.
   
 This occurs before userland code, route handlers, or server action logic executes, therefore application developers cannot safely reject the request once parsing begins.
 
