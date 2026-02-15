@@ -380,3 +380,67 @@ oom_group_kill 0
 419430400
 419287040
 ```
+
+
+
+
+---
+### Test 5: 
+
+Run the server.mjs
+```bash
+[keshavgoyal@hazelnut rsc-file-dos]$ systemd-run --user --scope -p MemoryMax=400M \
+  node --conditions=react-server server.mjs
+Running scope as unit: run-r563cc5e07efc4baaa82343786dc57f15.scope
+listening on http://127.0.0.1:3000
+```
+
+Send the Payload:
+
+```bash
+[keshavgoyal@hazelnut react]$ dd if=/dev/zero of=big-600m.bin bs=1M count=600
+curl -F "file=@big-600m.bin" http://127.0.0.1:3000/
+600+0 records in
+600+0 records out
+629145600 bytes (629 MB, 600 MiB) copied, 0.274313 s, 2.3 GB/s
+done
+```
+
+
+Output:
+```bash
+[keshavgoyal@hazelnut rsc-file-dos]$ systemd-run --user --scope -p MemoryMax=400M \
+  node --conditions=react-server server.mjs
+Running scope as unit: run-r563cc5e07efc4baaa82343786dc57f15.scope
+listening on http://127.0.0.1:3000
+[+0.3s] in=172MB rss=217MB heapUsed=7MB ext=175MB
+[+0.5s] in=362MB rss=407MB heapUsed=8MB ext=365MB
+[+1.0s] in=378MB rss=390MB heapUsed=8MB ext=381MB
+[+1.2s] in=386MB rss=389MB heapUsed=8MB ext=389MB
+[+1.4s] in=400MB rss=392MB heapUsed=8MB ext=403MB
+[+2.2s] in=424MB rss=392MB heapUsed=8MB ext=427MB
+[+2.4s] in=452MB rss=395MB heapUsed=8MB ext=455MB
+[+2.7s] in=480MB rss=395MB heapUsed=8MB ext=483MB
+[+2.9s] in=508MB rss=398MB heapUsed=8MB ext=511MB
+[+3.2s] in=534MB rss=402MB heapUsed=8MB ext=537MB
+[+3.5s] in=564MB rss=402MB heapUsed=8MB ext=567MB
+[+3.7s] in=594MB rss=404MB heapUsed=9MB ext=597MB
+root rejected: Error Connection closed.
+
+```
+
+
+```bash
+[keshavgoyal@hazelnut react]$ cg=$(systemctl --user show -p ControlGroup --value run-r563cc5e07efc4baaa82343786dc57f15.scope)
+cat /sys/fs/cgroup${cg}/memory.max
+cat /sys/fs/cgroup${cg}/memory.current
+cat /sys/fs/cgroup${cg}/memory.events
+419430400
+418742272
+low 0
+high 0
+max 5608
+oom 0
+oom_kill 0
+oom_group_kill 0
+```
