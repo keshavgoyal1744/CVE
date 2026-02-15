@@ -1,7 +1,7 @@
-A. Vulnerability Summary
+### A. Vulnerability Summary
 A remote attacker can crash a server that uses React's multipart reply decoding by uploading a large file, because React buffers the entire file in memory with no size limit.
 
-B. Why It Is Exploitable (Root Cause)
+### B. Why It Is Exploitable (Root Cause)
 In react-server, file parts are accumulated in an in-memory array of chunks with no byte cap:
 ReactFlightReplyServer.js (line 1902) creates chunks: [] for each file handle.
 ReactFlightReplyServer.js (line 1914) appends every chunk: handle.chunks.push(chunk).
@@ -14,11 +14,11 @@ ReactFlightDOMServerNode.js (line 603) calls resolveFileComplete(...) at end
 
 No __DEV__ gating here; the behavior is production-relevant.
 
-C. Real-World Impact
+### C. Real-World Impact
 Process OOM and crash (or severe GC thrash), taking down SSR/RSC infrastructure.
 If autoscaled/restarted, attacker can force crash loops and sustained outage by repeating requests.
 
-D. Step-by-Step Reproduction
+### D. Step-by-Step Reproduction
 Preconditions: a Node server endpoint that accepts multipart/form-data and uses decodeReplyFromBusboy(...) (directly or via a framework integration) without strict upstream body/file size limits.
 
 Create a minimal repro server (separate folder is easiest):
