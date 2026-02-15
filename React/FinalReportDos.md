@@ -28,7 +28,19 @@ In `react-server`, multipart file parts are accumulated without a byte cap:
 
 * Node version: v24.13.0
 * OS: Linux
-* Package versions: `npm ls react react-dom react-server-dom-webpack busboy`
+* Package versions:
+  ```bash
+[keshavgoyal@hazelnut rsc-file-dos]$ npm ls react react-dom react-server-dom-webpack busboy
+rsc-file-dos@1.0.0 /tmp/rsc-file-dos
+├── busboy@1.6.0
+├─┬ react-dom@19.2.4
+│ └── react@19.2.4 deduped
+├─┬ react-server-dom-webpack@19.2.4
+│ ├── react-dom@19.2.4 deduped
+│ └── react@19.2.4 deduped
+└── react@19.2.4
+
+  ```
 
 ## Step-by-Step Reproduction
 Preconditions: a Node server endpoint that accepts multipart/form-data and uses decodeReplyFromBusboy(...) (directly or via a framework integration) without strict upstream body/file size limits.
