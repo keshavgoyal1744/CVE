@@ -12,6 +12,13 @@ The issue is not dependent on Node.js configuration or reverse proxy behavior; i
 - Remote exploitation possible
 - No authentication required
 - Single malicious request sufficient to trigger resource exhaustion
+
+## Environment
+
+* Node version: v24.13.0
+* OS: Linux
+* Package versions: `npm ls react react-dom react-server-dom-webpack busboy`
+
 ### B. Why It Is Exploitable (Root Cause)
 In react-server, file parts are accumulated in an in-memory array of chunks with no byte cap:
 ReactFlightReplyServer.js (line 1902) creates chunks: [] for each file handle.
