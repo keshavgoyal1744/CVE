@@ -220,7 +220,9 @@ Connection: close
 **Patched System Response:**
 - HTTP 302 redirect to `/login`
 
-#: For Admin Level Account  Verification
+
+-----
+# For Admin Level Account  Verification
 
 Steps to reproduce:
 
@@ -406,7 +408,8 @@ CONFIG_TAMPER_SUCCESS
 <img width="1495" height="929" alt="image" src="https://github.com/user-attachments/assets/5ea35d34-0ab1-4d09-a4ad-7cfe09939ce1" />
 
 
-4. Prove password reset abuse (higher impact)
+4. Password reset abuse from admin account for a user account:
+   
 
 
 ---
