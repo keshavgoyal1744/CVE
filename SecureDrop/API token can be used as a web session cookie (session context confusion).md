@@ -3,9 +3,11 @@
 
 ## A. Vulnerability Summary
 
-A valid API bearer token can be replayed as the `js` cookie to access web-authenticated routes, breaking the separation between API authentication and web session authentication.
+A shared session verification context bug in `sessions.py` allows API bearer tokens (issued for `/api/v1/*` authentication) to be replayed as the web session cookie (`js=`) to access web-authenticated endpoints. The issue stems from cross-request state bleed: API requests mutate shared instance state (`key_prefix`, `salt`) to API-specific values, and subsequent non-API requests do not reset these values back to the web-session defaults. As a result, the web cookie verification flow and Redis lookup for the `js` cookie may incorrectly use the API token verifier parameters, causing an API token string to be accepted as a valid web session cookie.
 
-**Severity:** High  
+This breaks the intended security boundary between API authentication and interactive web authentication. In a vulnerable instance, any attacker who obtains a victim's API token can authenticate to web-only routes by sending `Cookie: js=<API_TOKEN>` (after hitting an API endpoint to trigger the buggy state), bypassing the normal web login flow. This includes bypassing interactive authentication steps and session semantics expected by the UI (e.g., browser session handling and any web login checks). The behavior is reproducible reliably with a single API "priming" request (e.g., `GET /api/v1/`) followed by a web request carrying the API token in the `js` cookie.
+
+**Severity:** Critical  
 **Type:** Authentication Bypass  
 **Attack Vector:** Network  
 **Complexity:** Low
@@ -42,6 +44,10 @@ An API token value can be accepted as a `js` cookie in web authentication flows 
 
 ## C. Real-World Impact
 
+Authentication bypass / session impersonation: An attacker with a stolen API token can access web routes as the token's owner by replaying the token as `Cookie: js=<token>`.
+Separation-of-context failure: API credentials are treated as web session credentials due to shared verifier state, violating a core auth invariant.
+Admin takeover with admin token: If the token belongs to an admin user, the attacker gains access to the Admin Interface and can perform high-impact administrative actions.
+
 ### Attack Scenarios
 
 1. **Standard User Compromise:**
@@ -56,13 +62,25 @@ An API token value can be accepted as a `js` cookie in web authentication flows 
      - System configuration controls
      - Account deletion/modification
 
+
+Demonstrated Real-World Exploitation (Observed)
+Using only an admin API token replayed as a web cookie, I demonstrated:
+
+### Admin UI access: 
+```bash
+GET /admin/
+```
+returns HTTP 200 and renders the Admin Interface when `Cookie: js=$ADMIN_TOKEN` is provided after priming.
+* Configuration tampering: Extracted CSRF token from `/admin/config` and successfully changed the organization name via `/admin/update-org-name`, verified by reading `/admin/config` and observing the new value.
+* Password reset abuse: Accessed `/admin/edit/<id>` with replayed cookie, extracted CSRF token and generated password, and reset another user's password via `/admin/edit/<id>/new-password`. Verified the old password no longer works and the new password succeeds.
+* Account deletion: Deleted a user via `/admin/delete/<id>` using replayed cookie and CSRF token; verified the user can no longer authenticate and UI login fails, consistent with successful deletion.
+
 ### Business Impact
 
-- Complete authentication bypass
-- Unauthorized access to sensitive web functionality
-- Potential data breach
-- Regulatory compliance violations (depending on data handled)
-- Reputational damage
+This vulnerability enables full compromise of the web UI security model when API tokens are exposed. Many environments treat API tokens as "integration-only" secrets and may store them in places more likely to leak (CI logs, scripts, config files, debugging output). If a token is obtained, an attacker can pivot into the web UI with the privileges of the token owner.
+For admin tokens, the impact is critical:
+* Unauthorized administrative access can lead to account takeovers (password resets), user deletion, and configuration changes that can disrupt operations, lock out legitimate users, or weaken security posture.
+* Depending on deployment, this may lead to sensitive data exposure and operational compromise, potentially triggering incident response, regulatory reporting, and reputational damage.
 
 ---
 
