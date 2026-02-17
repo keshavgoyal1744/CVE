@@ -341,7 +341,8 @@ Connection: close
 
 
 
-3. Prove config tampering (safe demo)
+## 3. Prove config tampering via admin tokens:
+
 Fetch CSRF from admin config page with stolen cookie-session:
 ```bash
 CSRF_CFG=$(curl -s "$BASE/admin/config" -H "Cookie: js=$ADMIN_TOKEN" | python3 -c '
@@ -426,7 +427,7 @@ CONFIG_TAMPER_SUCCESS
 <img width="1495" height="929" alt="image" src="https://github.com/user-attachments/assets/5ea35d34-0ab1-4d09-a4ad-7cfe09939ce1" />
 
 
-4. Password reset abuse from admin account for a user account:
+## 4. Password reset abuse from admin account for a user account:
    
 Use the following script directly in terminal to reset password for a user level account:
 
@@ -553,7 +554,7 @@ I verified the new updated password by logging in via UI. Please see the below s
 <img width="1920" height="523" alt="image" src="https://github.com/user-attachments/assets/0f6e5796-051f-4c3f-9e39-8a43e558e999" />
 
 
-4. Delete a user account from this:
+## 5. Delete a user account from this:
    
 Use the following script directly in terminal to delete a user level account:
 
