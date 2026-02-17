@@ -597,6 +597,49 @@ curl -i -s -X POST "$BASE/api/v1/token" \
 
 ```
 
+My terminal output:
+
+```bash
+{
+  "first_name": null,
+  "is_admin": true,
+  "last_login": "2026-02-17T00:40:15.491317",
+  "last_name": null,
+  "username": "journalist",
+  "uuid": "3cdca50b-83e5-493f-8e21-8a6e5ee65979"
+}
+CSRF_LEN=91 TARGET_ID=2
+HTTP/1.1 302 FOUND
+Server: Werkzeug/2.2.3 Python/3.12.3
+Date: Tue, 17 Feb 2026 00:40:15 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 201
+Location: /admin/
+Connection: close
+
+<!doctype html>
+<html lang=en>
+<title>Redirecting...</title>
+<h1>Redirecting...</h1>
+<p>You should be redirected automatically to the target URL: <a href="/admin/">/admin/</a>. If not, click the link.
+  Deleted user &#39;dellsberg&#39;.
+STILL_PRESENT
+HTTP/1.1 403 FORBIDDEN
+Server: Werkzeug/2.2.3 Python/3.12.3
+Date: Tue, 17 Feb 2026 00:40:46 GMT
+Content-Type: application/json
+Content-Length: 73
+Connection: close
+
+{
+  "error": "Forbidden", 
+  "message": "Token authentication failed."
+}
+
+```
+
+Tried logging in via UI but login failed:
+<img width="1874" height="754" alt="image" src="https://github.com/user-attachments/assets/4a9cbcfa-5483-478f-b81f-632a478c74b8" />
 
 ---
 
