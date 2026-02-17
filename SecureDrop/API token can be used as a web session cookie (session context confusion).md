@@ -641,6 +641,10 @@ Connection: close
 Tried logging in via UI but login failed:
 <img width="1874" height="754" alt="image" src="https://github.com/user-attachments/assets/4a9cbcfa-5483-478f-b81f-632a478c74b8" />
 
+
+Checked in the admin panel and the account is deleted:
+<img width="1924" height="603" alt="image" src="https://github.com/user-attachments/assets/a7475f1d-d61f-4ce8-8917-120a82b756e2" />
+
 ---
 
 ## E. Exploit Chain Possibilities
