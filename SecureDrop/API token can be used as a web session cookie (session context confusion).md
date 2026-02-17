@@ -666,8 +666,13 @@ Checked in the admin panel and the account is deleted:
 ---
 
 ## E. Exploit Chain Possibilities
-
 ### Attack Chain
+
+1) Obtain API token (via logs, backups, developer tooling, leaked secrets, compromised workstation, etc.)
+2) Trigger session context confusion by sending a request to `/api/v1/*` (primes the shared verifier state)
+3) Replay token as web session cookie: `Cookie: js=<API_TOKEN>`
+4) Access web-only routes as victim; if token is admin → access admin UI and perform privileged actions
+
 
 ```
 Token Theft/Exposure
