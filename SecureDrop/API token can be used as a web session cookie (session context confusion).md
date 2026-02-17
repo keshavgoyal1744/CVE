@@ -529,8 +529,12 @@ Connection: close
   "journalist_last_name": null, 
   "journalist_uuid": "92d08e5f-9116-4023-8dd0-045389dad120", 
                                                                
-
 ```
+
+<img width="1920" height="523" alt="image" src="https://github.com/user-attachments/assets/0f6e5796-051f-4c3f-9e39-8a43e558e999" />
+
+
+
 ---
 
 ## E. Exploit Chain Possibilities
