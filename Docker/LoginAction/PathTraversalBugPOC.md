@@ -408,4 +408,4 @@ Ensure all scope handling follows the same validation logic.
 
 ## Conclusion
 
-The action allows attacker-controlled `scope` values to escape the Buildx configuration directory and control the `DOCKER_CONFIG` path. Because Docker writes credentials to this path, the bug provides a reliable arbitrary credential file write primitive, enabling CI secret exfiltration and supply-chain abuse.
+The action trusts the user-controlled `scope` input when constructing the Buildx configuration directory, allowing path traversal outside the intended workspace. This directly influences the `DOCKER_CONFIG` environment variable, causing Docker to write its authentication `config.json` to an attacker-chosen location. As a result, the vulnerability provides a reliable arbitrary credential write primitive within the runner filesystem. In real CI pipelines, this can be chained with artifact uploads, caches, or subsequent build steps to expose registry credentials or manipulate image pulls and pushes, leading to potential secret leakage and downstream supply-chain compromise.
