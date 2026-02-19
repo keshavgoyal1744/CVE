@@ -344,6 +344,10 @@ leaked-docker-config
 
 This demonstrates the attacker can control the location where Docker authentication material is written and exfiltrate it.
 
+<img width="1263" height="740" alt="Github Logs screenshot" src="https://github.com/user-attachments/assets/21ad5089-15c1-408b-94d8-8bdbcf026bdb" />
+
+
+
 **5. Expected Result (Patched / Not Vulnerable)**
 
 If the vulnerability is fixed:
