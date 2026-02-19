@@ -74,7 +74,7 @@ $DOCKER_CONFIG/config.json
 ### 1. Clone the project
 
 ```bash
-git clone <repo-url> login-action
+git clone https://github.com/docker/login-action
 cd login-action
 ```
 
