@@ -1,4 +1,4 @@
-# Path Traversal → Arbitrary Docker Credential Write (Scoped Buildx Config)
+# Path Traversal in scope Allows Arbitrary Docker Credential Write via DOCKER_CONFIG (CI Secret Exfiltration / Supply-Chain Risk)
 
 ## Summary
 
