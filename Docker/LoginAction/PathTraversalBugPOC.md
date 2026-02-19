@@ -379,7 +379,7 @@ Impact: Supply chain compromise / CI secret leakage
 ### 1. Canonicalize and constrain path
 
 Resolve the final path and enforce it stays under the base directory:
-
+ 
 ```js
 const resolved = path.resolve(baseDir, scope);
 
