@@ -195,9 +195,7 @@ drwxrwxrwt 18 root   root   460 Feb 18 20:46 ..
 ## Exploit by Chaining:
 The proof-of-concept demonstrates that the `scope` input is used to construct the Docker configuration directory without enforcing a path boundary. By supplying a traversal payload (`../../../../leak`), the workflow causes the action to set `DOCKER_CONFIG` to a location outside its intended Buildx directory and write a valid `config.json` containing authentication material there. The workflow then successfully reads and uploads that file as an artifact, proving the write occurred in an attacker-controlled, reachable path. This shows the vulnerability is not only a directory escape but an exploitable primitive: any workflow that later uploads, caches, or otherwise exposes workspace or temporary paths could unintentionally leak Docker credentials, and any workflow that forwards untrusted inputs into `scope` could be abused to redirect secret material to attacker-accessible locations.
 
-Steps to Reproduce — Scoped Path Traversal → Arbitrary Docker Config Write
-
-Overview
+## Steps to Reproduce — Scoped Path Traversal → Arbitrary Docker Config Write
 
 The following procedure demonstrates that an attacker-controlled `scope` value can escape the intended Buildx configuration directory and force Docker credentials to be written to an arbitrary filesystem location inside the GitHub Actions runner. No local environment is required — the issue can be reproduced entirely using a GitHub repository.
 
