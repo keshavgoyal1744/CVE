@@ -251,7 +251,7 @@ On a shared self-hosted runner:
    ```
 5. Registry credentials are reused or exfiltrated.
  
-This enables **cross-workflow credential theft**.
+On persistent self-hosted runners, this enables **cross-workflow credential theft**.
 
 ### Step by Step reproduction:
 
