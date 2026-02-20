@@ -232,6 +232,8 @@ EXPLOIT CONFIRMED: logout missed the real login config path
 ~/.docker/buildx/config/registry-1.docker.io/myscope/config.json
 ```
 
+I am attaching my output as proof (GithubLogs.png)
+
 ---
 
 ## 7. Exploit Chain Scenario
@@ -423,6 +425,8 @@ git push
 
 Run `poc-selfhosted-seed` first. After it succeeds and you confirm the credential file is present at `~/.docker/buildx/config/registry-1.docker.io/myscope/config.json`, run `poc-selfhosted-steal`. The second workflow will find the leftover file, print its contents, and decode the auth value — confirming that credentials from a previous job are readable by a subsequent workflow running on the same runner.
 
+
+I am attaching my outputs to Seed and Steal both workflows for proof.
 
 
 ---
