@@ -253,10 +253,11 @@ On a shared self-hosted runner:
  
 This enables **cross-workflow credential theft**.
 
-## Step by Step reproduction:
+### Step by Step reproduction:
 
 This chain demonstrates credential persistence across two workflows on the same self-hosted runner. Workflow A leaves a credential file behind due to the scoped cleanup bypass. Workflow B, running later as the same runner user, finds and reads it. Only dummy credentials (`demo:demo`) are used throughout.
 On persistent self-hosted runners, an attacker can run a first workflow that triggers the scoped cleanup mismatch, leaving Docker credentials in config.json. The attacker then triggers a later workflow on the same runner and reads that leftover file to recover registry credentials. This enables cross-job secret theft and can be used to authenticate to private registries and push malicious images (supply-chain impact).
+
 ---
 
 **Pre-requisites**
