@@ -259,6 +259,40 @@ This chain demonstrates credential persistence across two workflows on the same 
 
 Use a Linux self-hosted runner. Add a unique runner label, for example `lab-runner-1`. Make sure only one runner has that label, so both workflows are guaranteed to hit the same machine.
 
+### Runner Setup
+
+** Install and register runner with a unique label**
+
+On the Linux machine (as the `gha` user), run the download and extract commands shown by GitHub in the UI. Then run the config command with your unique label:
+
+```bash
+./config.sh \
+  --url https://github.com/<your-username>/<your-repo> \
+  --token <PASTE_TOKEN_FROM_UI> \
+  --name lab-runner-1 \
+  --labels lab-runner-1 \
+  --work _work \
+  --unattended \
+  --replace
+```
+
+The token is one-time and expires quickly — paste it immediately after copying from the GitHub UI. The label `lab-runner-1` must match exactly what is used in the workflow `runs-on` fields.
+
+---
+
+** Run runner as a service**
+
+Still on the same machine:
+
+```bash
+sudo ./svc.sh install
+sudo ./svc.sh start
+sudo ./svc.sh status
+```
+
+Status should show `running`. On the GitHub Settings → Actions → Runners page, the runner should appear as **Idle** and **Online**.
+
+
 ---
 
 **Workflow A – Seed the leftover credential file**
