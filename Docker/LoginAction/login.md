@@ -197,7 +197,7 @@ Run the workflow from the Actions tab.
 
 ---
 
-## 6. Expected Vulnerable Output
+## 6. Vulnerable Output
 
 **Saved state:**
 
