@@ -66,7 +66,7 @@ This is particularly dangerous in shared CI environments.
 
 ---
 
-## 5. Proof of Concept (Deterministic & Safe)
+## 5. Proof of Concept
 
 This PoC uses a fake `docker` binary to safely demonstrate the mismatch.
 
