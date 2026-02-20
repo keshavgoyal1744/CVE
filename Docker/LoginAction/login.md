@@ -32,11 +32,12 @@ This results in:
 Because the paths differ, logout does not remove the actual credential file.
 Root cause in code:
 
-context.ts (line 46) defaults registry to docker.io
-context.ts (line 51) computes configDir from raw inputs.registry (can be empty)
-main.ts (line 13) saves that wrong path into state
-docker.ts (line 59) recomputes using real runtime registry for login
-main.ts (line 33) post logout trusts saved state path
+- context.ts (line 46) defaults registry to docker.io
+- context.ts (line 51) computes configDir from raw inputs.registry (can be empty)
+- main.ts (line 13) saves that wrong path into state
+- docker.ts (line 59) recomputes using real runtime registry for login
+- main.ts (line 33) post logout trusts saved state path
+
 ---
 
 ## 3. Impact
