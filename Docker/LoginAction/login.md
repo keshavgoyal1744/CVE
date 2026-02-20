@@ -249,7 +249,7 @@ On a shared self-hosted runner:
  
 This enables **cross-workflow credential theft**.
 
-# Step by Step reproduction:
+## Step by Step reproduction:
 
 This chain demonstrates credential persistence across two workflows on the same self-hosted runner. Workflow A leaves a credential file behind due to the scoped cleanup bypass. Workflow B, running later as the same runner user, finds and reads it. Only dummy credentials (`demo:demo`) are used throughout.
 
