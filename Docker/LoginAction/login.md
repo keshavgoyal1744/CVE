@@ -11,7 +11,7 @@ As a result, credentials written during `docker login` are not removed during th
 
 This creates a credential persistence vulnerability that can enable cross-workflow credential theft on shared or persistent runners.
 
-### Tested on: Login/action: v3.7.0
+### Tested on: Login/action: v3.7.0 (https://github.com/docker/login-action)
 ---
 
 ## 2. Root Cause
