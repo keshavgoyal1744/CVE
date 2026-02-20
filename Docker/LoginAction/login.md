@@ -261,7 +261,7 @@ Use a Linux self-hosted runner. Add a unique runner label, for example `lab-runn
 
 ### Runner Setup
 
-** Install and register runner with a unique label**
+**Install and register runner with a unique label**
 
 On the Linux machine (as the `gha` user), run the download and extract commands shown by GitHub in the UI. Then run the config command with your unique label:
 
@@ -280,7 +280,7 @@ The token is one-time and expires quickly — paste it immediately after copying
 
 ---
 
-** Run runner as a service**
+**Run runner as a service**
 
 Still on the same machine:
 
