@@ -246,7 +246,7 @@ On a shared self-hosted runner:
    ~/.docker/buildx/config/registry-1.docker.io/myscope/config.json
    ```
 5. Registry credentials are reused or exfiltrated.
-
+ 
 This enables **cross-workflow credential theft**.
 
 ---
