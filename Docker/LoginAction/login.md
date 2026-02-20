@@ -426,6 +426,26 @@ git push
 Run `poc-selfhosted-seed` first. After it succeeds and you confirm the credential file is present at `~/.docker/buildx/config/registry-1.docker.io/myscope/config.json`, run `poc-selfhosted-steal`. The second workflow will find the leftover file, print its contents, and decode the auth value — confirming that credentials from a previous job are readable by a subsequent workflow running on the same runner.
 
 
+# Exploit Chain Output
+
+**Seed job output**
+
+```
+cmd=login DOCKER_CONFIG=/home/gha/.docker/buildx/config/registry-1.docker.io/myscope ... docker.io
+cmd=logout DOCKER_CONFIG=/home/gha/.docker/buildx/config/myscope ... docker.io
+SEED_DONE=/home/gha/.docker/buildx/config/registry-1.docker.io/myscope/config.json
+```
+---
+
+**Steal job output**
+
+```
+FOUND: /home/gha/.docker/buildx/config/registry-1.docker.io/myscope/config.json
+DECODED_AUTH=demo:demo
+```
+
+A subsequent workflow running on the same runner as the same user finds the leftover `config.json`, reads it, and successfully decodes the auth value — confirming cross-workflow credential theft via the scoped cleanup bypass.
+
 I am attaching my outputs to Seed and Steal both workflows for proof.
 
 
