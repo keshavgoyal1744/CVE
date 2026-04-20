@@ -11,4 +11,6 @@ Step 2) Create a non-admin user and open PowerShell as that user.
 ```bash
 net user bb-low "LabPass123!" /add
 runas /user:.\bb-low powershell.exe
+runas /user:%COMPUTERNAME%\bb-low powershell.exe
 ```
+<img width="864" height="230" alt="image" src="https://github.com/user-attachments/assets/d03242e7-48bb-4d1d-be4c-24be233c3ccc" />
