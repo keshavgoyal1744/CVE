@@ -4,7 +4,73 @@
  
 ## A. Summary
  
-An attacker-controlled Stripe object ID can escape its intended URL path segment and invoke a **different** Stripe API endpoint.
+An attacker-controlled Stripe object ID passed into generated SDK resource methods (e.g., `stripe.paymentIntents.update(id, ...)`) is not URL-encoded before being interpolated into the request path, allowing it to escape its intended path segment and invoke **different** Stripe API endpoints.
+ 
+---
+ 
+Because the SDK directly concatenates the `id` into paths like:
+ 
+```
+/v1/payment_intents/${id}
+```
+ 
+an attacker can supply values such as:
+ 
+```
+pi_123/cancel
+```
+ 
+which transforms the intended request:
+ 
+```
+POST /v1/payment_intents/pi_123
+```
+ 
+into:
+ 
+```
+POST /v1/payment_intents/pi_123/cancel
+```
+ 
+This results in **endpoint confusion**, where a method intended to perform a safe update operation is instead routed to a state-changing endpoint (e.g., `cancel`, `capture`, `confirm`).
+ 
+---
+ 
+## Validation Bypass
+ 
+Importantly, this behavior can bypass common application-level validation patterns such as:
+ 
+```js
+id.startsWith('pi_')
+```
+ 
+because injected values like `pi_123/cancel` **still satisfy the validation check** while silently altering the request semantics.
+ 
+---
+ 
+## Impact
+ 
+Using Stripe's real test API, this issue was demonstrated to:
+ 
+- Successfully route an `update` call to the `cancel` endpoint
+- Trigger Stripe's cancel-specific error responses
+- Change the PaymentIntent status from `requires_payment_method` to `canceled`
+This confirms that attacker-controlled input can lead to **unintended financial state changes** on Stripe objects.
+ 
+---
+ 
+## Security Implication
+ 
+This is not just a formatting issue — it is a **business logic vulnerability at the SDK layer**, where:
+ 
+- Developers rely on method-level guarantees (e.g., *"this function updates a PaymentIntent"*)
+- The SDK silently allows those guarantees to be broken via unencoded path parameters
+As a result, applications that expose Stripe operations with partially trusted input may unknowingly allow attackers to:
+ 
+- Cancel payments
+- Trigger unintended lifecycle transitions
+- Access or invoke subresource endpoints
+**without explicitly calling those APIs.**
  
 ---
  
