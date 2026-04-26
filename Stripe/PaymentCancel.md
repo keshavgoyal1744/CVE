@@ -12,7 +12,7 @@ An attacker-controlled Stripe object ID can escape its intended URL path segment
  
 Generated methods splice IDs directly into template strings:
  
-- **`PaymentIntents.ts` (line 77)** uses:
+- **`PaymentIntents.ts` ** uses:
   ```ts
   /v1/payment_intents/${id}
   ```
