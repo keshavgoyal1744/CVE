@@ -42,9 +42,9 @@ This can cause:
 ### Step 1 — Build Locally Without Changing Source
  
 ```bash
-cd /home/grads/keshavgoyal/stripe-node
+cd <dir>
 yarn install --frozen-lockfile
-just build
+./node_modules/.bin/tsc -p tsconfig.cjs.json
 ```
  
 ### Step 2 — Run a Local Mock Stripe API and Observe the Path
