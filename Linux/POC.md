@@ -403,3 +403,5 @@ scheduled=<nonzero> ran=<nonzero> err=0
 BUF=AAAAAAAAAAAAAAAA
 BUF=BPFOKAAAAAAAAAAA
 ```
+<img width="1147" height="326" alt="Screenshot 2026-05-03 023353" src="https://github.com/user-attachments/assets/28baecb6-4d66-4034-b8cf-0eef3b3ecf52" />
+<img width="955" height="269" alt="Screenshot 2026-05-03 023410" src="https://github.com/user-attachments/assets/62f82527-164c-4a55-956d-cf60bb6b23d7" />
