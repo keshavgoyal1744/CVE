@@ -40,9 +40,7 @@ Relevant production code:
 ---
  
 ## Lab Setup
- 
-> Do not rename the kernel source's `kernel/` directory. That broke your first build because `init/Kconfig` includes `kernel/irq/Kconfig`.
- 
+  
 ```bash
 mkdir -p ~/kernel-lab
 cd ~/kernel-lab
@@ -417,10 +415,11 @@ scheduled=<nonzero> ran=<nonzero> err=0
 BUF=AAAAAAAAAAAAAAAA
 BUF=BPFOKAAAAAAAAAAA
 ```
+#### IMG 1:
 <img width="1147" height="326" alt="Screenshot 2026-05-03 023353" src="https://github.com/user-attachments/assets/28baecb6-4d66-4034-b8cf-0eef3b3ecf52" />
 
 ---
-
+#### IMG 2:
 <img width="955" height="269" alt="Screenshot 2026-05-03 023410" src="https://github.com/user-attachments/assets/62f82527-164c-4a55-956d-cf60bb6b23d7" />
 
 
@@ -428,8 +427,6 @@ BUF=BPFOKAAAAAAAAAAA
 ### Exploit chain:
 
 ## 1. Exit QEMU
- 
-I press:
  
 ```
 Ctrl-a x
@@ -593,13 +590,18 @@ BUF=BPFOKAAAAAAAAAAA
 ```
  
 This proves the `BPFOK` write works from a token-delegated user-namespace loader, not init-namespace root.
+#### IMG 3:
 <img width="736" height="408" alt="image" src="https://github.com/user-attachments/assets/bf2e3bd9-76f0-41a9-934e-705b19fd65a4" />
 
 ---
+#### IMG 4:
 <img width="1078" height="407" alt="image" src="https://github.com/user-attachments/assets/37af812d-8fcc-4a99-a319-dd298bbc5a68" />
 
+
+#### IMG 5.1:
 <img width="835" height="150" alt="image" src="https://github.com/user-attachments/assets/153b8c2d-5011-4795-846a-75bf82ffc332" />
 
+#### IMG 5.2:
 <img width="881" height="293" alt="image" src="https://github.com/user-attachments/assets/d15cf599-24aa-4bba-bc44-17a897b837b9" />
 
 
